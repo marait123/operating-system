@@ -22,9 +22,13 @@
 int main(int argc, char *argv[])
 {
     initClk();
+    for (int i = 0; i < argc; i++)
+    {
+        printf("sched_arg: %s\n", argv[i]);
+    }
 
     //TODO implement the scheduler :)
     //upon termination release the clock resources.
-
+    printf("schedular is started\n");
     destroyClk(true);
 }
