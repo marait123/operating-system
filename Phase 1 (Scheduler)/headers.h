@@ -26,6 +26,12 @@ int getClk()
 {
     return *shmaddr;
 }
+enum SCHEDULING_ALGO
+{
+    HPF,
+    SRTN,
+    RR
+};
 
 /*
  * All process call this function at the beginning to establish communication between them and the clock module.
@@ -33,6 +39,7 @@ int getClk()
 */
 void initClk()
 {
+
     int shmid = shmget(SHKEY, 4, 0444);
     while ((int)shmid == -1)
     {

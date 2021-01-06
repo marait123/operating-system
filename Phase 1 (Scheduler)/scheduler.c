@@ -1,6 +1,6 @@
 #include "headers.h"
 /*
-        how it should work
+    how it should work
     1. Start a new process. (Fork it and give it its parameters.)
     2. Switch between two processes according to the scheduling algorithm. (Stop the
     old process and save its state and start/resume another one.)
