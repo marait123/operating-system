@@ -19,16 +19,45 @@
         (a) Scheduler.log
         (b) Scheduler.perf
     */
+
+int msg_q_id;
+
+struct msgbuff
+{
+    long mtype;
+    char mtext[256];
+};
+
 int main(int argc, char *argv[])
 {
     initClk();
-    for (int i = 0; i < argc; i++)
-    {
-        printf("sched_arg: %s\n", argv[i]);
-    }
 
+    int algo_type = atoi(argv[0]);
+    int quantum = atoi(argv[1]);
     //TODO implement the scheduler :)
     //upon termination release the clock resources.
     printf("schedular is started\n");
+    int msg_q_key = ftok("keyfile", 65);
+    msg_q_id = msgget(msg_q_key, 0666 | IPC_CREAT);
+
+    struct msgbuff message;
+    while (1)
+    {
+        /* receive all types of messages */
+        // rec_val = msgrcv(up_q_id, &message, sizeof(message.mtext), 0, !IPC_NOWAIT);
+        // if (rec_val == -1)
+        // {
+        //     perror("Error in receive");
+        //     exit(-1);
+        // }
+        // else
+        // {
+        //     printf("\nMessage received: %s with m-type: %d \n", message.mtext, message.mtype);
+        //     // convert the message to upper
+        //     int len = strlen(message.mtext);
+        //     conv(message.mtext, len);
+        //     send_val = msgsnd(down_q_id, &message, sizeof(message.mtext), !IPC_NOWAIT);
+        // }
+    }
     destroyClk(true);
 }
