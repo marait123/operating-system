@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <errno.h>
 
 typedef short bool;
 #define true 1
@@ -67,3 +68,9 @@ void destroyClk(bool terminateAll)
         killpg(getpgrp(), SIGINT);
     }
 }
+
+struct msgbuff
+{
+    long mtype;
+    char mtext[256];
+};

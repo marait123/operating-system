@@ -21,16 +21,21 @@
     */
 
 int msg_q_id;
-
-struct msgbuff
+bool end = false; // this is gonna become true
+                  // when i recieve end signal from the process_generator
+                  // which means all processes arrived
+void clearResources(int signum)
 {
-    long mtype;
-    char mtext[256];
-};
+    //TODO Clears all resources in case of interruption
+    destroyClk(true);
+    msgctl(msg_q_id, IPC_RMID, (struct msqid_ds *)0);
+    exit(0);
+}
 
 int main(int argc, char *argv[])
 {
     initClk();
+    signal(SIGINT, clearResources);
 
     int algo_type = atoi(argv[0]);
     int quantum = atoi(argv[1]);
@@ -41,8 +46,18 @@ int main(int argc, char *argv[])
     msg_q_id = msgget(msg_q_key, 0666 | IPC_CREAT);
 
     struct msgbuff message;
-    while (1)
+    int rec_val = msgrcv(msg_q_id, &message, sizeof(message.mtext), 0, !IPC_NOWAIT);
+    printf("errno value is %d\n", errno);
+    // sleep(1);
+    // this means that there is something
+    if (errno != ENOMSG)
     {
+        printf("message recieved is %s\n", message.mtext);
+    }
+    // when should i terminate?
+    while (false)
+    {
+
         /* receive all types of messages */
         // rec_val = msgrcv(up_q_id, &message, sizeof(message.mtext), 0, !IPC_NOWAIT);
         // if (rec_val == -1)
@@ -59,5 +74,8 @@ int main(int argc, char *argv[])
         //     send_val = msgsnd(down_q_id, &message, sizeof(message.mtext), !IPC_NOWAIT);
         // }
     }
+
+    // this call will end all the processes
+    // the clock and the process generator
     destroyClk(true);
 }

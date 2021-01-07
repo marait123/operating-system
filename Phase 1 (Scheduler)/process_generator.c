@@ -13,10 +13,12 @@ struct Process
     int priority; // this is process priority ranges from 0 to 10 where 0 is the heighest priority
 };
 void clearResources(int);
+int msg_q_id;
 
 int main(int argc, char *argv[])
 {
     signal(SIGINT, clearResources);
+
     // TODO Initialization
     // 1. Read the input files.
     FILE *pFile;
@@ -122,11 +124,49 @@ int main(int argc, char *argv[])
     // 5. Create a data structure for processes and provide it with its parameters.
     // 6. Send the information to the scheduler at the appropriate time.
     // 7. Clear clock resources
-    sleep(5);
-    destroyClk(true);
+
+    int msg_q_key = ftok("keyfile", 65);
+    msg_q_id = msgget(msg_q_key, 0666 | IPC_CREAT);
+    if (msg_q_id == -1)
+    {
+        printf("failed to start the message queue \n");
+    }
+    struct msgbuff message;
+
+    bool test = true;
+    printf("message sent in queue");
+    strcpy(message.mtext, "NEW");
+    message.mtype = 0;
+    int send_val = msgsnd(msg_q_id, &message, sizeof(message.mtext), !IPC_NOWAIT);
+
+    while (false)
+    {
+        // check if there are any process left
+        // if there are check if one of them
+        // it's arrival time is now if it is
+        // send a message to scheduler
+        // the program will terminate when it recieves an interrupt signal
+        // initialted by the scheduler program
+        if (test)
+        {
+            printf("message sent in queue");
+            strcpy(message.mtext, "NEW");
+            message.mtype = 0;
+            int send_val = msgsnd(msg_q_id, &message, sizeof(message.mtext), !IPC_NOWAIT);
+            test = false;
+        }
+    }
+    // destroyClk(true);
+    destroyClk(false); // changed it to false so that the schedular is the one
+                       // that is gone end all
+    clearResources(0);
 }
 
 void clearResources(int signum)
 {
     //TODO Clears all resources in case of interruption
+    msgctl(msg_q_id, IPC_RMID, (struct msqid_ds *)0);
+    destroyClk(true); // changed it to false so that the schedular is the one
+
+    exit(0);
 }
