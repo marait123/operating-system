@@ -12,13 +12,18 @@ struct Process
     int runtime;
     int priority; // this is process priority ranges from 0 to 10 where 0 is the heighest priority
 };
-void clearResources(int);
-int msg_q_id;
+
+struct msgbuff
+{
+    long mtype;
+    char mtext[256];
+};
+int msgq_id;
+void clearResources(int signum);
 
 int main(int argc, char *argv[])
 {
     signal(SIGINT, clearResources);
-
     // TODO Initialization
     // 1. Read the input files.
     FILE *pFile;
@@ -122,51 +127,56 @@ int main(int argc, char *argv[])
     printf("current time is %d\n", x);
     // TODO Generation Main Loop
     // 5. Create a data structure for processes and provide it with its parameters.
+
+    //Getting PID and preparing message to message queue
+    key_t key_id;
+    int send_val;
+    key_id = ftok("keyfile", 65);               //create unique key
+    msgq_id = msgget(key_id, 0666 | IPC_CREAT); //create message queue and return id
+    if (msgq_id == -1)
+    {
+        perror("Error in create");
+        exit(-1);
+    }
+    printf("Message Queue ID = %d\n", msgq_id);
+
+    //message to send
+    char str[256];
+
+    struct msgbuff message;
+    long iD = getpid();
+
     // 6. Send the information to the scheduler at the appropriate time.
     // 7. Clear clock resources
-
-    int msg_q_key = ftok("keyfile", 65);
-    msg_q_id = msgget(msg_q_key, 0666 | IPC_CREAT);
-    if (msg_q_id == -1)
+    int i = 0;
+    while (1)
     {
-        printf("failed to start the message queue \n");
-    }
-    struct msgbuff message;
-
-    bool test = true;
-    printf("message sent in queue");
-    strcpy(message.mtext, "NEW");
-    message.mtype = 0;
-    int send_val = msgsnd(msg_q_id, &message, sizeof(message.mtext), !IPC_NOWAIT);
-
-    while (false)
-    {
-        // check if there are any process left
-        // if there are check if one of them
-        // it's arrival time is now if it is
-        // send a message to scheduler
-        // the program will terminate when it recieves an interrupt signal
-        // initialted by the scheduler program
-        if (test)
+        //get its arrival time
+        if (sys_prcesses[i].arrival_time == getClk())
         {
-            printf("message sent in queue");
-            strcpy(message.mtext, "NEW");
-            message.mtype = 0;
-            int send_val = msgsnd(msg_q_id, &message, sizeof(message.mtext), !IPC_NOWAIT);
-            test = false;
+            snprintf(str, sizeof(str), "%d %d %d %d", sys_prcesses[i].id, sys_prcesses[i].arrival_time, sys_prcesses[i].runtime, sys_prcesses[i].priority);
+            message.mtype = iD;
+            strcpy(message.mtext, str);
+            send_val = msgsnd(msgq_id, &message, sizeof(message.mtext), IPC_NOWAIT);
+            if (send_val == -1)
+                perror("Error in send");
+            curr_number_of_processes--;
+            i++;
+        }
+        //if all processes are served
+        if (curr_number_of_processes == 0)
+        {
+            strcpy(message.mtext, "Done !");
+            send_val = msgsnd(msgq_id, &message, sizeof(message.mtext), IPC_NOWAIT);
         }
     }
-    // destroyClk(true);
-    destroyClk(false); // changed it to false so that the schedular is the one
-                       // that is gone end all
-    clearResources(0);
 }
 
 void clearResources(int signum)
 {
-    //TODO Clears all resources in case of interruption
-    msgctl(msg_q_id, IPC_RMID, (struct msqid_ds *)0);
-    destroyClk(true); // changed it to false so that the schedular is the one
 
+    //TODO Clears all resources in case of interruption
+    msgctl(msgq_id, IPC_RMID, (struct msqid_ds *)0);
+    destroyClk(true); // changed it to false so that the schedular is the one
     exit(0);
 }

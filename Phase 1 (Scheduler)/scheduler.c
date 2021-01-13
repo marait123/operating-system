@@ -1,4 +1,6 @@
 #include "headers.h"
+#include <errno.h>
+#include <string.h>
 /*
     how it should work
     1. Start a new process. (Fork it and give it its parameters.)
@@ -19,63 +21,200 @@
         (a) Scheduler.log
         (b) Scheduler.perf
     */
-
+void handler(int signum);
+bool No_new_process = false;
 int msg_q_id;
-bool end = false; // this is gonna become true
-                  // when i recieve end signal from the process_generator
-                  // which means all processes arrived
-void clearResources(int signum)
+struct msgbuff
 {
-    //TODO Clears all resources in case of interruption
-    destroyClk(true);
-    msgctl(msg_q_id, IPC_RMID, (struct msqid_ds *)0);
-    exit(0);
-}
+    long mtype;
+    char mtext[256];
+};
+struct Observer
+{
+    // the output file data loader
+};
+struct Entry
+{
+    int index;
+    int pid;
+    int arrivalTime;
+    int remainTime;
+    int waitTime;
+    int runTime;
+    int priority;
+    char state;
+};
 
+struct Node
+{
+    struct Entry entry;
+    struct Node *next;
+};
+struct Node *head = NULL;
+struct Node *rear = NULL;
+void push_back(struct Entry entry)
+{
+    struct Node *newEntry = (struct Node *)malloc(sizeof(struct Node));
+    newEntry->entry = entry;
+    if (head == NULL)
+    {
+        head = newEntry;
+    }
+    else
+    {
+        struct Node *temp = rear;
+        temp->next = newEntry;
+        rear = newEntry;
+    }
+}
+struct Node *findRunning()
+{
+
+    //start from the first link
+    struct Node *current = head;
+
+    //if list is empty
+    if (head == NULL)
+    {
+        return NULL;
+    }
+
+    //navigate through list
+    while (current->entry.state != 'R')
+    {
+        //if it is last node
+        if (current->next == NULL)
+        {
+            return NULL;
+        }
+        else
+        {
+            //go to next link
+            current = current->next;
+        }
+    }
+
+    return current;
+}
+struct Node *delete (int index)
+{
+    struct Node *current = head;
+    struct Node *previous = NULL;
+    if (head == NULL)
+    {
+        return NULL;
+    }
+
+    while (current->entry.index != index)
+    {
+        if (current->next == NULL)
+        {
+            return NULL;
+        }
+        else
+        {
+            previous = current;
+            current = current->next;
+        }
+    }
+    if (current == head)
+    {
+        head = head->next;
+    }
+    else
+    {
+        previous->next = current->next;
+    }
+    return current;
+}
+void translate(char str[])
+{
+    int n = atoi(str[0]);
+    for (int i = 0; i < n; i++)
+    {
+        if (fork() == 0)
+        {
+            struct Entry entry;
+            char delim = " ";
+
+            // read the id
+            char *ptr = strtok(str, delim);
+            entry.index = atoi(ptr);
+
+            // read the arrival
+            ptr = strtok(NULL, delim);
+            entry.arrivalTime = atoi(ptr);
+
+            // read the runtime
+            ptr = strtok(NULL, delim);
+            entry.runTime = atoi(ptr);
+            entry.remainTime = atoi(ptr);
+
+            // read the priority
+            ptr = strtok(NULL, delim);
+            entry.priority = atoi(ptr);
+
+            push_back(entry);
+            execl("./process.out", entry.remainTime);
+            printf("error is %d\n", errno);
+            printf("error occurred couldn't execute process.c");
+            exit(-1);
+        }
+    }
+}
 int main(int argc, char *argv[])
 {
     initClk();
-    signal(SIGINT, clearResources);
-
     int algo_type = atoi(argv[0]);
     int quantum = atoi(argv[1]);
     //TODO implement the scheduler :)
     //upon termination release the clock resources.
     printf("schedular is started\n");
-    int msg_q_key = ftok("keyfile", 65);
-    msg_q_id = msgget(msg_q_key, 0666 | IPC_CREAT);
+    key_t key_id;
+    int rec_val, msgq_id;
+    key_id = ftok("keyfile", 65);               //create unique key
+    msgq_id = msgget(key_id, 0666 | IPC_CREAT); //create message queue and return id
+    if (msgq_id == -1)
+    {
+        perror("Error in create");
+        exit(-1);
+    }
+    printf("Message Queue ID = %d\n", msgq_id);
 
     struct msgbuff message;
-    int rec_val = msgrcv(msg_q_id, &message, sizeof(message.mtext), 0, !IPC_NOWAIT);
-    printf("errno value is %d\n", errno);
-    // sleep(1);
-    // this means that there is something
-    if (errno != ENOMSG)
+    while (1)
     {
-        printf("message recieved is %s\n", message.mtext);
-    }
-    // when should i terminate?
-    while (false)
-    {
+        if (head == NULL && No_new_process)
+            break;
+        rec_val = msgrcv(msgq_id, &message, sizeof(message.mtext), 0, !IPC_NOWAIT);
+        if (rec_val == -1)
+        {
+            continue;
+        }
+        else
+        {
+            ////if there is no new processes
+            if (!strcmp(message.mtext, "Done !"))
+            {
+                printf("wohooo !\n");
+                No_new_process = true;
+            }
+            else
+            {
+                printf("\nMessage received: %s with m-type: %ld \n", message.mtext, message.mtype);
+                translate(message.mtext);
+            }
+        }
 
-        /* receive all types of messages */
-        // rec_val = msgrcv(up_q_id, &message, sizeof(message.mtext), 0, !IPC_NOWAIT);
-        // if (rec_val == -1)
-        // {
-        //     perror("Error in receive");
-        //     exit(-1);
-        // }
-        // else
-        // {
-        //     printf("\nMessage received: %s with m-type: %d \n", message.mtext, message.mtype);
-        //     // convert the message to upper
-        //     int len = strlen(message.mtext);
-        //     conv(message.mtext, len);
-        //     send_val = msgsnd(down_q_id, &message, sizeof(message.mtext), !IPC_NOWAIT);
-        // }
+        signal(SIGUSR1, handler);
     }
 
-    // this call will end all the processes
-    // the clock and the process generator
     destroyClk(true);
+}
+void handler(int signum)
+{
+    printf("Schedular have got signal #%d from a finished process\n", signum);
+    struct Node *temp = findRunning();
+    delete (temp->entry.index);
+    signal(SIGUSR1, handler);
 }
