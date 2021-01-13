@@ -12,7 +12,14 @@ struct Process
     int runtime;
     int priority; // this is process priority ranges from 0 to 10 where 0 is the heighest priority
 };
-void clearResources(int);
+
+struct msgbuff
+{
+    long mtype;
+    char mtext[256];
+};
+int msgq_id;
+void clearResources(int signum);
 
 int main(int argc, char *argv[])
 {
@@ -120,13 +127,59 @@ int main(int argc, char *argv[])
     printf("current time is %d\n", x);
     // TODO Generation Main Loop
     // 5. Create a data structure for processes and provide it with its parameters.
+    
+    
+    //Getting PID and preparing message to message queue
+    key_t key_id;
+    int send_val;
+    key_id = ftok("keyfile", 65);               //create unique key
+    msgq_id = msgget(key_id, 0666 | IPC_CREAT); //create message queue and return id
+    if (msgq_id == -1)
+    {
+        perror("Error in create");
+        exit(-1);
+    }
+    printf("Message Queue ID = %d\n", msgq_id);
+
+    //message to send
+    char str[256];
+
+    struct msgbuff message;
+    long iD = getpid();
+
     // 6. Send the information to the scheduler at the appropriate time.
     // 7. Clear clock resources
-    sleep(5);
-    destroyClk(true);
+    int i = 0;
+    while (1)
+    {
+        //get its arrival time
+        if(sys_prcesses[i].arrival_time == getClk())
+        {
+            snprintf(str, sizeof(str), "%d %d %d %d", sys_prcesses[i].id, sys_prcesses[i].arrival_time, sys_prcesses[i].runtime, sys_prcesses[i].priority);
+            message.mtype = iD;
+            strcpy(message.mtext, str);
+            send_val = msgsnd(msgq_id, &message, sizeof(message.mtext), IPC_NOWAIT);
+            if (send_val == -1)
+                perror("Error in send");
+            curr_number_of_processes--;
+            i++;
+        }
+        //if all processes are served
+        if (curr_number_of_processes == 0)
+        {
+            strcpy(message.mtext, "Done !");
+            send_val = msgsnd(msgq_id, &message, sizeof(message.mtext), IPC_NOWAIT);
+        }
+        
+    }
+    
 }
 
 void clearResources(int signum)
 {
+    
     //TODO Clears all resources in case of interruption
+    msgctl(msgq_id, IPC_RMID, (struct msqid_ds *)0);
+    exit(0);
+    signal(SIGINT, clearResources);
 }
