@@ -20,7 +20,6 @@
         (b) Scheduler.perf
     */
 
-int msg_q_id;
 
 struct msgbuff
 {
@@ -37,27 +36,41 @@ int main(int argc, char *argv[])
     //TODO implement the scheduler :)
     //upon termination release the clock resources.
     printf("schedular is started\n");
-    int msg_q_key = ftok("keyfile", 65);
-    msg_q_id = msgget(msg_q_key, 0666 | IPC_CREAT);
+
+    key_t key_id;
+    int rec_val, msgq_id;
+    key_id = ftok("keyfile", 65);               //create unique key
+    msgq_id = msgget(key_id, 0666 | IPC_CREAT); //create message queue and return id
+    if (msgq_id == -1)
+    {
+        perror("Error in create");
+        exit(-1);
+    }
+    printf("Message Queue ID = %d\n", msgq_id);
 
     struct msgbuff message;
+    // The job of the scheduler
     while (1)
     {
         /* receive all types of messages */
-        // rec_val = msgrcv(up_q_id, &message, sizeof(message.mtext), 0, !IPC_NOWAIT);
-        // if (rec_val == -1)
-        // {
-        //     perror("Error in receive");
-        //     exit(-1);
-        // }
-        // else
-        // {
-        //     printf("\nMessage received: %s with m-type: %d \n", message.mtext, message.mtype);
-        //     // convert the message to upper
-        //     int len = strlen(message.mtext);
-        //     conv(message.mtext, len);
-        //     send_val = msgsnd(down_q_id, &message, sizeof(message.mtext), !IPC_NOWAIT);
-        // }
+        rec_val = msgrcv(msgq_id, &message, sizeof(message.mtext), 0, IPC_NOWAIT);
+        if (rec_val == -1)
+        {
+             continue;
+        }
+        else
+        {
+            ////if there is no new processes
+            if (!strcmp(message.mtext,"Done !"))
+            {
+                printf("wohooo !\n");
+                break;
+            }
+            else
+            {
+                printf("\nMessage received: %s with m-type: %ld \n", message.mtext, message.mtype);
+            }
+        }
     }
     destroyClk(true);
 }
