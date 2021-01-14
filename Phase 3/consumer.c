@@ -158,6 +158,8 @@ int main()
     passing) to the producer telling it that the buffer is no longer full.
     • If the buffer is neither empty nor full, it consumes an item from the buffer
     */
+
+    // TODO: what happens if consumer is started first
     while (1)
     {
         // check if buffer is empty
@@ -168,7 +170,7 @@ int main()
         if (count == 0)
         {
 
-            printf("buffer is empty");
+            printf("buffer is empty\n");
             message.mtype = 0;
             up(SEM_ID);
             rec_val = msgrcv(up_q_id, &message, sizeof(message.mtext), 0, !IPC_NOWAIT);
@@ -186,9 +188,11 @@ int main()
         }
         else if (count == BUFF_SIZE)
         {
-            printf("buffer is full");
+            printf("buffer is full\n");
             int *target_addr = BUFF_ADRS + *BUFF_START_ADRS;
             (*BUFF_START_ADRS) = ((*BUFF_START_ADRS) + 1) % BUFF_SIZE;
+            *BUFF_FULL_ADRS -= 1;
+
             printf("number consumed %d \n", *target_addr);
             strcpy(message.mtext, "not_full");
             up(SEM_ID);
@@ -204,7 +208,7 @@ int main()
             printf("number consumed %d \n", *target_addr);
         }
         printf("number of items %d\n", count);
-        sleep(1);
+        // sleep(1);
         up(SEM_ID);
     }
     return 0;

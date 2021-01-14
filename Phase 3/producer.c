@@ -13,7 +13,7 @@
 #define MSG_SIZE 4096
 #define BUFF_SIZE 15
 // the code handles any number of clients simultaneously
-
+// 1. problem in removing
 struct msgbuff
 {
     long mtype;
@@ -31,7 +31,9 @@ int *BUFF_FULL_ADRS;
 int SEM_ID;
 void exit_handler(int sigId)
 {
-    printf("exit BUFF_FULL_ID %d", BUFF_FULL_ID);
+    //TODO: BUFF_FULL_ID check that is deleted
+    //TODO: check there is no reference before deletion
+    // printf("exit BUFF_FULL_ID %d", BUFF_FULL_ID);
     shmdt(BUFF_START_ADRS);
     shmdt(BUFF_END_ADRS);
     shmdt(BUFF_ADRS);
@@ -158,6 +160,7 @@ int main()
     printf("BUFF_ID  = %d\n", BUFF_ID);
 
     // initialize the semaphore
+    // TODO:
     int buff_number = 0;
     struct msgbuff message;
     // producer writes buff_number starting from the buff_end
@@ -168,8 +171,11 @@ int main()
     passing) to the producer telling it that the buffer is no longer full.
     • If the buffer is neither empty nor full, it consumes an item from the buffer
     */
+    // TODO: problem when producer is faster than consumer
+    //TODO: check that more than one producer and cosumers are allowed
     while (1)
     {
+
         // check if buffer is empty
         down(SEM_ID);
         printf("semaphore in producer\n");
@@ -178,7 +184,7 @@ int main()
         if (count == 0)
         {
 
-            printf("buffer is empty");
+            printf("buffer is empty\n");
             int *target_addr = BUFF_ADRS + *BUFF_END_ADRS;
             *target_addr = buff_number;
             buff_number++;
@@ -203,6 +209,7 @@ int main()
                 exit(-1);
             }
             printf("something was consumed\n");
+            // buff_number++;
         }
         else
         {
@@ -214,7 +221,8 @@ int main()
             (*BUFF_FULL_ADRS)++;
         }
         printf("number of items %d\n", count);
-        // sleep(3);
+        printf("current buff_number %d\n", buff_number);
+        sleep(4);
         up(SEM_ID);
     }
     return 0;
