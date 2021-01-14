@@ -5,12 +5,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <string.h>
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <sys/shm.h>
 #include <signal.h>
+#include <sys/sem.h>
 #define MSG_SIZE 4096
+#define BUFF_SIZE 15
 // the code handles any number of clients simultaneously
 
 struct msgbuff
@@ -20,64 +21,68 @@ struct msgbuff
 };
 int up_q_id = 0;
 int down_q_id = 0;
-int shm_id = 0;
+// int shm_id = 0;
+int BUFF_ID, BUFF_START_ID, BUFF_END_ID;
+
+int *BUFF_START_ADRS;
+int *BUFF_END_ADRS;
+int *BUFF_ADRS;
+
+int SEM_ID;
 
 void exit_handler(int sigId)
 {
+
+    shmdt(BUFF_START_ADRS);
+    shmdt(BUFF_END_ADRS);
+    shmdt(BUFF_ADRS);
     msgctl(up_q_id, IPC_RMID, (struct msqid_ds *)0);
     msgctl(down_q_id, IPC_RMID, (struct msqid_ds *)0);
-    shmctl(shm_id, IPC_RMID, (struct shmid_ds *)0);
+    shmctl(BUFF_ID, IPC_RMID, (struct shmid_ds *)0);
+    shmctl(BUFF_END_ID, IPC_RMID, (struct shmid_ds *)0);
+    shmctl(BUFF_START_ID, IPC_RMID, (struct shmid_ds *)0);
+    semctl(SEM_ID, IPC_RMID, (struct semid_ds *)0);
     exit(0);
 }
 
-void conv(char *msg, int size)
+/* arg for semctl system calls. */
+union Semun
 {
-    int i;
-    for (i = 0; i < size; ++i)
-        if (islower(msg[i]))
-            msg[i] = toupper(msg[i]);
-        else if (isupper(msg[i]))
-            msg[i] = tolower(msg[i]);
-}
+    int val;               /* value for SETVAL */
+    struct semid_ds *buf;  /* buffer for IPC_STAT & IPC_SET */
+    ushort *array;         /* array for GETALL & SETALL */
+    struct seminfo *__buf; /* buffer for IPC_INFO */
+    void *__pad;
+};
 
-void msg_write(char *msg)
+void down(int sem)
 {
-    // printf("memory id to write %d", shm_id);
-    void *shmaddr = shmat(shm_id, (void *)0, 0);
-    if (shmaddr == -1)
+    struct sembuf p_op;
+
+    p_op.sem_num = 0;
+    p_op.sem_op = -1;
+    p_op.sem_flg = !IPC_NOWAIT;
+
+    if (semop(sem, &p_op, 1) == -1)
     {
-        perror("Error in attach in writer");
+        perror("Error in down()");
         exit(-1);
     }
-    else
-    {
-        // printf("\nWriter: Shared memory attached at address %x\n", shmaddr);
-        // printf("message to send: %s", msg);
-
-        // strcpy((char *)shmaddr, "quit");
-        strcpy(shmaddr, msg);
-    }
-
-    // printf("\nWriter Detaching...\n");
-    shmdt(shmaddr);
 }
 
-void msg_read(char *msg)
+void up(int sem)
 {
-    void *shmaddr = shmat(shm_id, (void *)0, 0);
-    if (shmaddr == -1)
+    struct sembuf v_op;
+
+    v_op.sem_num = 0;
+    v_op.sem_op = 1;
+    v_op.sem_flg = !IPC_NOWAIT;
+
+    if (semop(sem, &v_op, 1) == -1)
     {
-        perror("Error in attach in reader");
+        perror("Error in up()");
         exit(-1);
     }
-    else
-    {
-        // printf("\reader: Shared memory attached at address %x\n", shmaddr);
-        strcpy(msg, (char *)shmaddr);
-    }
-
-    // printf("\nreader Detaching...\n");
-    shmdt(shmaddr);
 }
 
 int main()
@@ -88,56 +93,81 @@ int main()
     signal(SIGINT, exit_handler);
     int up_q_key = ftok("keyfile", 65);
     int down_q_key = ftok("keyfile", 66);
-    int shm_key = ftok("keyfile", 67);
+    int BUFF_key = ftok("keyfile", 67);
+    int BUFF_START_key = ftok("keyfile", 68);
+    int BUFF_END_key = ftok("keyfile", 69);
+    int SEM_key = ftok("keyfile", 70);
+
+    BUFF_START_ID = shmget(BUFF_START_key, sizeof(int), IPC_CREAT | 0666);
+    BUFF_END_ID = shmget(BUFF_END_key, sizeof(int), IPC_CREAT | 0666);
+    // now initialize BUFF_START_ID BUFF_END_ID
+    BUFF_START_ADRS = shmat(BUFF_START_ID, (void *)0, 0);
+    BUFF_END_ADRS = shmat(BUFF_END_ID, (void *)0, 0);
+    SEM_ID = semget(SEM_key, 1, 0666 | IPC_CREAT);
+    BUFF_ID = shmget(BUFF_key, BUFF_SIZE * sizeof(int), IPC_EXCL | IPC_CREAT | 0666);
+
+    // this means it is not initialized yet
+    if (BUFF_ID != -1)
+    {
+        BUFF_ID = shmget(BUFF_key, BUFF_SIZE * sizeof(int), IPC_CREAT | 0666);
+
+        // initialize memory
+        *BUFF_START_ADRS = 0;
+        *BUFF_END_ADRS = 0;
+        union Semun semun;
+        // intialize semphore
+        semun.val = 0; /* initial value of the semaphore, Binary semaphore */
+        if (semctl(SEM_ID, 0, SETVAL, semun) == -1)
+        {
+            perror("Error in semctl");
+            exit(-1);
+        }
+    }
+    BUFF_ADRS = shmat(BUFF_ID, (void *)0, 0);
+
+    if (BUFF_START_ADRS == -1 || BUFF_END_ADRS == -1 || BUFF_ADRS == -1)
+    {
+        perror("Error in attach");
+        exit(-1);
+    }
 
     up_q_id = msgget(up_q_key, 0666 | IPC_CREAT);
     down_q_id = msgget(down_q_key, 0666 | IPC_CREAT);
-    shm_id = shmget(shm_key, 4096, IPC_CREAT | 0666);
-
-    if (up_q_id == -1 || down_q_id == -1 || shm_id == -1)
+    if (up_q_id == -1 || down_q_id == -1)
     {
-        perror("Error in create\n");
+        perror("Error in creating up and down queues\n");
         exit(-1);
     }
     printf("up Queue ID = %d\n", up_q_id);
     printf("down Queue ID = %d\n", down_q_id);
-    printf("shared memory ID = %d\n", shm_id);
+    printf("BUFF_ID  = %d\n", BUFF_ID);
 
-    // initialize the memory
+    // initialize the semaphore
 
     struct msgbuff message;
     while (1)
     {
-        /* receive all types of messages */
-        rec_val = msgrcv(up_q_id, &message, sizeof(message.mtext), 0, !IPC_NOWAIT);
+        // check if buffer is empty
+        down(SEM_ID);
+        printf("semaphore in consumer");
+        sleep(1);
+        up(SEM_ID);
 
-        if (rec_val == -1)
-        {
-            perror("Error in receive");
-            exit(-1);
-        }
-        else
-        {
-            printf("\nMessage received: %s with m-type: %d \n", message.mtext, message.mtype);
-            // convert the message to upper
-
-            char messageText[MSG_SIZE];
-
-            // read the message from the shared memory
-            msg_read(messageText);
-            int len = strlen(messageText);
-            // convert it
-            conv(messageText, len);
-
-            // conv(message.mtext, len);
-            // write the message to shared memory
-            msg_write(messageText);
-
-            // send done message
-            strcpy(message.mtext, "finished conversion");
-            send_val = msgsnd(down_q_id, &message, sizeof(message.mtext), !IPC_NOWAIT);
-        }
+        // /* receive all types of messages */
+        // rec_val = msgrcv(up_q_id, &message, sizeof(message.mtext), 0, !IPC_NOWAIT);
+        // if (rec_val == -1)
+        // {
+        //     perror("Error in receive");
+        //     exit(-1);
+        // }
+        // else
+        // {
+        //     printf("\nMessage received: %s with m-type: %d \n", message.mtext, message.mtype);
+        //     // convert the message to upper
+        //     // send done message
+        //     strcpy(message.mtext, "notfull");
+        //     send_val = msgsnd(down_q_id, &message, sizeof(message.mtext), !IPC_NOWAIT);
+        // }
     }
-
     return 0;
 }

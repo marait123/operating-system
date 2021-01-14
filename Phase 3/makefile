@@ -1,4 +1,4 @@
 build:
-	gcc -o producer.out producer.c
-	gcc -o consumer.out consumer.c
+	gcc -o producer producer.c
+	gcc -o consumer consumer.c
 	
