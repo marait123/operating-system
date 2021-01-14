@@ -115,7 +115,7 @@ int main()
         *BUFF_END_ADRS = 0;
         union Semun semun;
         // intialize semphore
-        semun.val = 0; /* initial value of the semaphore, Binary semaphore */
+        semun.val = 1; /* initial value of the semaphore, Binary semaphore */
         if (semctl(SEM_ID, 0, SETVAL, semun) == -1)
         {
             perror("Error in semctl");
@@ -148,8 +148,8 @@ int main()
     {
         // check if buffer is empty
         down(SEM_ID);
-        printf("semaphore in producer");
-        sleep(1);
+        printf("semaphore in producer\n");
+        // sleep(1);
         up(SEM_ID);
     }
     return 0;

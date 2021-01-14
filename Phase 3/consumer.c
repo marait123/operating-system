@@ -29,7 +29,6 @@ int *BUFF_END_ADRS;
 int *BUFF_ADRS;
 
 int SEM_ID;
-
 void exit_handler(int sigId)
 {
 
@@ -116,7 +115,7 @@ int main()
         *BUFF_END_ADRS = 0;
         union Semun semun;
         // intialize semphore
-        semun.val = 0; /* initial value of the semaphore, Binary semaphore */
+        semun.val = 1; /* initial value of the semaphore, Binary semaphore */
         if (semctl(SEM_ID, 0, SETVAL, semun) == -1)
         {
             perror("Error in semctl");
@@ -149,25 +148,9 @@ int main()
     {
         // check if buffer is empty
         down(SEM_ID);
-        printf("semaphore in consumer");
-        sleep(1);
+        printf("semaphore in consumer\n");
+        // sleep(1);
         up(SEM_ID);
-
-        // /* receive all types of messages */
-        // rec_val = msgrcv(up_q_id, &message, sizeof(message.mtext), 0, !IPC_NOWAIT);
-        // if (rec_val == -1)
-        // {
-        //     perror("Error in receive");
-        //     exit(-1);
-        // }
-        // else
-        // {
-        //     printf("\nMessage received: %s with m-type: %d \n", message.mtext, message.mtype);
-        //     // convert the message to upper
-        //     // send done message
-        //     strcpy(message.mtext, "notfull");
-        //     send_val = msgsnd(down_q_id, &message, sizeof(message.mtext), !IPC_NOWAIT);
-        // }
     }
     return 0;
 }
