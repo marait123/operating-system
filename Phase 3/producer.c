@@ -114,8 +114,6 @@ int main()
     // this means it is not initialized yet
     if (BUFF_ID != -1)
     {
-        BUFF_ID = shmget(BUFF_key, BUFF_SIZE * sizeof(int), IPC_CREAT | 0666);
-
         // initialize memory
         *BUFF_START_ADRS = 0;
         *BUFF_END_ADRS = 0;
