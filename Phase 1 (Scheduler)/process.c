@@ -9,17 +9,19 @@ int main(int agrc, char * argv[])
     
     //TODO it needs to get the remaining time from somewhere
     remainingtime = atoi(argv[0]);
+    int clk;
+    int prevClk = 0;
     while (remainingtime > 0)
     {
-        remainingtime--;
-        break;
-        // Another Solution: wait the clock to be inc then iterate once more 
+        clk = getClk();
+        if(clk != prevClk)
+        {
+            remainingtime--;
+            prevClk = clk;
+        }
     }
-    if(remainingtime == 0)
-    {
-        kill(getppid(),SIGUSR1);
-    }
-    destroyClk(false);
+    kill(getppid(),SIGUSR1);
+    destroyClk(true);
     
     return 0;
 }

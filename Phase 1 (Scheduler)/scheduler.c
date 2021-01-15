@@ -39,6 +39,7 @@ struct Entry
     int id;
     int pid;
     int arrivalTime;
+    int lastStart;
     int remainTime;
     int waitTime;
     int runTime;
@@ -80,14 +81,22 @@ void insert_Queue(struct Entry entry)
     {
         struct Node* curr = head;
         struct Node* prev = NULL;
-        // temp->next = newEntry;
-        // rear = newEntry;
         if(algo_type == 0)
         {
             while(entry.priority > curr->entry.priority)
             {
                 prev = curr;
                 curr = curr->next;
+            }
+            if(curr == head)
+            {
+                newEntry->next = head->next;
+                head->next = newEntry;
+            }
+            else
+            {
+                prev->next = newEntry;
+                newEntry->next = curr;
             }
         }
         else if(algo_type == 1)
@@ -97,21 +106,21 @@ void insert_Queue(struct Entry entry)
                 prev = curr;
                 curr = curr->next;
             }
-        }
-        if(curr == head)
-        {
-            newEntry->next = head;
-            head = newEntry;
-        }
-        else
-        {
-            prev->next = newEntry;
-            newEntry->next = curr;
+            if(curr == head)
+            {
+                newEntry->next = head;
+                head = newEntry;
+            }
+            else
+            {
+                prev->next = newEntry;
+                newEntry->next = curr;
+            }
         }
     }
 }
 
-struct Entry translate(char str[])
+void translate(char str[])
 {
     int n = 1;//atoi(str[0]);
     for(int i = 0; i < n; i++)
@@ -137,13 +146,10 @@ struct Entry translate(char str[])
         ptr = strtok(NULL, delim);
         entry.priority = atoi(ptr);
         entry.pid = -1;
-        display();
-        return entry;
-        //push_back(entry);
-        // execl("./process.out", entry.remainTime);
-        // printf("error is %d\n", errno);
-        // printf("error occurred couldn't execute process.c");
-        // exit(-1);
+        if(algo_type == 2)
+            push_back(entry);
+        else
+            insert_Queue(entry);
     }
 }
 void display()
@@ -166,6 +172,12 @@ void display()
 int main(int argc, char *argv[])
 {
     initClk();
+
+    int clk = getClk();
+    int prevClk = 0;
+
+    signal (SIGUSR1, handler);
+
     algo_type = atoi(argv[0]);
     int quantum = atoi(argv[1]);
     //TODO implement the scheduler :)
@@ -184,57 +196,148 @@ int main(int argc, char *argv[])
 
     struct msgbuff message;
     while (1)
-    {
-        if (head == NULL && No_new_process)
-            break;
-        rec_val = msgrcv(msgq_id, &message, sizeof(message.mtext), 0, IPC_NOWAIT);
-        if (rec_val != -1)
+    {   
+        clk = getClk();
+
+        if(clk != prevClk)
         {
-            ////if there is no new processes
-            if (!strcmp(message.mtext, "Done !"))
+            prevClk = clk;
+            if (head == NULL && No_new_process)
+                break;
+            rec_val = msgrcv(msgq_id, &message, sizeof(message.mtext), 0, IPC_NOWAIT);
+            if (rec_val != -1)
             {
-                printf("wohooo !\n");
-                No_new_process = true;
-            }
-            else
-            {
-                printf("\nMessage received: %s with m-type: %ld \n", message.mtext, message.mtype);
-                struct Entry entry = translate(message.mtext);
-                if(algo_type == 2)
-                    push_back(entry);
-                else
-                    insert_Queue(entry);
-            }
-        }
-        if(algo_type != 2)
-        {
-            if(head->entry.pid == -1)
-            {
-                if(fork() == 0)
+                ////if there is no new processes
+                if (!strcmp(message.mtext, "Done !"))
                 {
-                    printf(" I am going to fork....");
-                    head->entry.pid = getpid();
-                    head->entry.state = 'R';
-                    execl ("./process.out", head->entry.remainTime);
-                    printf("error is %d\n", errno);
-                    printf("error occurred couldn't execute process.out");
-                    exit(-1);
+                    printf("wohooo !\n");
+                    No_new_process = true;
+                }
+                else
+                {
+                    printf("\nMessage received: %s with m-type: %ld \n", message.mtext, message.mtype);
+                    translate(message.mtext);
+                    
                 }
             }
-            else
+            // Either HPF or SRTN
+            if(algo_type != 2 && head != NULL)
             {
-                head->entry.state = 'R';
-                execl ("./process.out", head->entry.remainTime);
-                printf("error is %d\n", errno);
-                printf("error occurred couldn't execute process.out");
-                exit(-1);
+                if(head->entry.pid == -1)
+                {   
+                    struct Node* temp = findRunning();
+                    if( temp != NULL)
+                    {
+                        kill(temp->entry.pid,SIGSTOP);
+                        temp->entry.remainTime -= (clk - temp->entry.lastStart);
+                        temp->entry.state = 'S';
+                    }
+                    // // Context switching
+                    // //while loop on running process
+                    // // found kill(current->entry.pid,SIGSTOP)
+                    // // ovserv.state stopped
+                    // // current->entry.r = r-(clk - lst)
+                    int pid = fork();
+                    if(pid == 0)
+                    {
+                        printf(" I am going to fork....");
+                        execl ("./process.out", head->entry.remainTime);
+                        printf("error is %d\n", errno);
+                        printf("error occurred couldn't execute process.out");
+                        exit(-1);
+                    }
+                    else
+                    {
+                        head->entry.pid = pid;
+                        head->entry.state = 'R';
+                        head->entry.lastStart = clk;
+                        // Saving the status for the system preparing to outfile
+                    }
+                }
+                else
+                {
+                    // //SIG CONT & lst = clk & save data
+                    struct Node* temp = findRunning();
+                    if(head->entry.state != 'R')
+                    {
+                        kill(temp->entry.pid,SIGSTOP);
+                        temp->entry.remainTime -= (clk - temp->entry.lastStart);
+                        temp->entry.state = 'S';
+                    }
+                    head->entry.state = 'R';
+                    head->entry.lastStart = clk;
+                    kill(head->entry.pid,SIGCONT);
+                }
+            }
+            // Round Roubin
+            else if (head != NULL)
+            {
+                struct Node* temp = findRunning();
+                if(temp == NULL)
+                {
+                    int pid = fork();
+                    if(pid == 0)
+                    {
+                        printf(" I am going to fork....");
+                        execl ("./process.out", head->entry.remainTime);
+                        printf("error is %d\n", errno);
+                        printf("error occurred couldn't execute process.out");
+                        exit(-1);
+                    }
+                    else
+                    {
+                        head->entry.pid = pid;
+                        head->entry.state = 'R';
+                        head->entry.lastStart = clk;
+                        // Saving the status for the system preparing to outfile
+                    }
+                }
+                else
+                { 
+                    if(clk - temp->entry.lastStart == quantum)
+                    {
+                        kill(temp->entry.pid,SIGSTOP);
+                        temp->entry.remainTime -= quantum;
+                        temp->entry.state = 'S';
+                        if(temp->next != NULL)
+                        {
+                            if(temp->next->entry.pid == -1)
+                            {
+                                int pid = fork();
+                                if(pid == 0)
+                                {
+                                    printf(" I am going to fork....");
+                                    execl ("./process.out", temp->next->entry.remainTime);
+                                    printf("error is %d\n", errno);
+                                    printf("error occurred couldn't execute process.out");
+                                    exit(-1);
+                                }
+                                else
+                                {
+                                    temp->next->entry.pid = pid;
+                                    temp->next->entry.state = 'R';
+                                    temp->next->entry.lastStart = clk;
+                                    // Saving the status for the system preparing to outfile
+                                }
+                            }
+                            else
+                            {
+                                temp->next->entry.state = 'R';
+                                temp->next->entry.lastStart = clk;
+                                kill(temp->next->entry.pid,SIGCONT);
+                            }
+                            
+                        }
+                        else if (head != temp)
+                        {
+                            head->entry.state = 'R';
+                            head->entry.lastStart = clk;
+                            kill(head->entry.pid,SIGCONT);
+                        }
+                    }
+                }
             }
         }
-        // If not forked then pid = fork()
-        // node->entry.pid = pid;
-        //execl ("./process.out", node->entry.remainigTime);
-        
-        signal (SIGUSR1, handler);
     }
 
     destroyClk(true);
