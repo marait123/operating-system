@@ -8,15 +8,16 @@ int main(int agrc, char * argv[])
     initClk();
     
     //TODO it needs to get the remaining time from somewhere
-    remainingtime = argv[0];
+    remainingtime = atoi(argv[0]);
     while (remainingtime > 0)
     {
         remainingtime--;
         break;
+        // Another Solution: wait the clock to be inc then iterate once more 
     }
     if(remainingtime == 0)
     {
-        signal(getppid(),SIGUSR1);
+        kill(getppid(),SIGUSR1);
     }
     destroyClk(false);
     
