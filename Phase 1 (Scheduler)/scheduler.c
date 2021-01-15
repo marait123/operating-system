@@ -48,22 +48,22 @@ struct Entry
 
 struct Node
 {
-   struct Entry entry;
-   struct Node *next;
+    struct Entry entry;
+    struct Node *next;
 };
 struct Node *head = NULL;
 struct Node *rear = NULL;
 void push_back(struct Entry entry)
 {
-    struct Node* newEntry = (struct Node*) malloc(sizeof(struct Node));
+    struct Node *newEntry = (struct Node *)malloc(sizeof(struct Node));
     newEntry->entry = entry;
-    if(head == NULL)
+    if (head == NULL)
     {
         head = newEntry;
     }
     else
     {
-        struct Node* temp = rear;
+        struct Node *temp = rear;
         temp->next = newEntry;
         rear = newEntry;
     }
@@ -185,13 +185,13 @@ int main(int argc, char *argv[])
     struct msgbuff message;
     while (1)
     {
-        if(head == NULL && No_new_process)
+        if (head == NULL && No_new_process)
             break;
         rec_val = msgrcv(msgq_id, &message, sizeof(message.mtext), 0, IPC_NOWAIT);
         if (rec_val != -1)
         {
             ////if there is no new processes
-            if (!strcmp(message.mtext,"Done !"))
+            if (!strcmp(message.mtext, "Done !"))
             {
                 printf("wohooo !\n");
                 No_new_process = true;

@@ -127,8 +127,7 @@ int main(int argc, char *argv[])
     printf("current time is %d\n", x);
     // TODO Generation Main Loop
     // 5. Create a data structure for processes and provide it with its parameters.
-    
-    
+
     //Getting PID and preparing message to message queue
     key_t key_id;
     int send_val;
@@ -153,7 +152,7 @@ int main(int argc, char *argv[])
     while (1)
     {
         //get its arrival time
-        if(sys_prcesses[i].arrival_time == getClk())
+        if (sys_prcesses[i].arrival_time == getClk())
         {
             snprintf(str, sizeof(str), "%d %d %d %d", sys_prcesses[i].id, sys_prcesses[i].arrival_time, sys_prcesses[i].runtime, sys_prcesses[i].priority);
             message.mtype = iD;
@@ -170,16 +169,14 @@ int main(int argc, char *argv[])
             strcpy(message.mtext, "Done !");
             send_val = msgsnd(msgq_id, &message, sizeof(message.mtext), IPC_NOWAIT);
         }
-        
     }
-    
 }
 
 void clearResources(int signum)
 {
-    
+
     //TODO Clears all resources in case of interruption
     msgctl(msgq_id, IPC_RMID, (struct msqid_ds *)0);
+    destroyClk(true); // changed it to false so that the schedular is the one
     exit(0);
-    signal(SIGINT, clearResources);
 }
