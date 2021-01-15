@@ -91,13 +91,13 @@ int main()
     int rec_val;
     int send_val;
     signal(SIGINT, exit_handler);
-    int up_q_key = ftok("keyfile", 65);
-    int down_q_key = ftok("keyfile", 66);
-    int BUFF_key = ftok("keyfile", 67);
-    int BUFF_START_key = ftok("keyfile", 68);
-    int BUFF_END_key = ftok("keyfile", 69);
-    int BUFF_FULL_key = ftok("keyfile", 70);
-    int SEM_key = ftok("keyfile", 71);
+    int up_q_key = ftok("Keyfile", 65);
+    int down_q_key = ftok("Keyfile", 66);
+    int BUFF_key = ftok("Keyfile", 67);
+    int BUFF_START_key = ftok("Keyfile", 68);
+    int BUFF_END_key = ftok("Keyfile", 69);
+    int BUFF_FULL_key = ftok("Keyfile", 70);
+    int SEM_key = ftok("Keyfile", 71);
 
     BUFF_START_ID = shmget(BUFF_START_key, sizeof(int), IPC_CREAT | 0666);
     BUFF_END_ID = shmget(BUFF_END_key, sizeof(int), IPC_CREAT | 0666);
@@ -150,6 +150,20 @@ int main()
     // initialize the semaphore
     int buff_number = 0;
     struct msgbuff message;
+    message.mtype = 0;
+
+    rec_val = msgrcv(down_q_id, &message, sizeof(message.mtext), 0, !IPC_NOWAIT);
+    if (rec_val == -1)
+    {
+        perror("Error in receive\n");
+        exit(-1);
+    }
+    else
+    {
+        printf("message received %s", message.mtype);
+    }
+    exit_handler(0);
+    return 0;
     // producer writes buff_number starting from the buff_end
     /*
     * If the buffer is empty, it waits for a message from the producer telling it that
@@ -174,12 +188,13 @@ int main()
             message.mtype = 0;
             up(SEM_ID);
             rec_val = msgrcv(up_q_id, &message, sizeof(message.mtext), 0, !IPC_NOWAIT);
-            down(SEM_ID);
             if (rec_val == -1)
             {
                 perror("Error in receive\n");
                 exit(-1);
             }
+            down(SEM_ID);
+
             printf("now buffer isn't empty\n");
             int *target_addr = BUFF_ADRS + *BUFF_START_ADRS;
             (*BUFF_START_ADRS) = ((*BUFF_START_ADRS) + 1) % BUFF_SIZE;
@@ -197,6 +212,10 @@ int main()
             strcpy(message.mtext, "not_full");
             up(SEM_ID);
             send_val = msgsnd(down_q_id, &message, sizeof(message.mtext), !IPC_NOWAIT);
+            if (rec_val == -1)
+            {
+                perror("error in receive\n");
+            }
             down(SEM_ID);
         }
         else
@@ -208,8 +227,8 @@ int main()
             printf("number consumed %d \n", *target_addr);
         }
         printf("number of items %d\n", count);
-        // sleep(1);
         up(SEM_ID);
+        sleep(1);
     }
     return 0;
 }

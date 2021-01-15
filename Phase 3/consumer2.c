@@ -23,7 +23,10 @@ int up_q_id = 0;
 int down_q_id = 0;
 // int shm_id = 0;
 int BUFF_ID, BUFF_START_ID, BUFF_END_ID, BUFF_FULL_ID;
-
+int REF_ID;
+int START_NUM_ID;
+int *REF_ADRS;
+int *START_NUM_ADRS;
 int *BUFF_START_ADRS;
 int *BUFF_END_ADRS;
 int *BUFF_ADRS;
@@ -31,18 +34,23 @@ int *BUFF_FULL_ADRS;
 int SEM_ID;
 void exit_handler(int sigId)
 {
+    *REF_ADRS -= 1;
+    if (*REF_ADRS == 0)
+    {
 
-    shmdt(BUFF_START_ADRS);
-    shmdt(BUFF_END_ADRS);
-    shmdt(BUFF_ADRS);
-    shmdt(BUFF_FULL_ADRS);
-    msgctl(up_q_id, IPC_RMID, (struct msqid_ds *)0);
-    msgctl(down_q_id, IPC_RMID, (struct msqid_ds *)0);
-    shmctl(BUFF_ID, IPC_RMID, (struct shmid_ds *)0);
-    shmctl(BUFF_END_ID, IPC_RMID, (struct shmid_ds *)0);
-    shmctl(BUFF_START_ID, IPC_RMID, (struct shmid_ds *)0);
-    semctl(BUFF_FULL_ID, IPC_RMID, (struct shmid_ds *)0);
-    semctl(SEM_ID, IPC_RMID, (struct semid_ds *)0);
+        shmdt(BUFF_START_ADRS);
+        shmdt(BUFF_END_ADRS);
+        shmdt(BUFF_ADRS);
+        shmdt(BUFF_FULL_ADRS);
+        msgctl(up_q_id, IPC_RMID, (struct msqid_ds *)0);
+        msgctl(down_q_id, IPC_RMID, (struct msqid_ds *)0);
+        shmctl(BUFF_ID, IPC_RMID, (struct shmid_ds *)0);
+        shmctl(BUFF_END_ID, IPC_RMID, (struct shmid_ds *)0);
+        shmctl(BUFF_START_ID, IPC_RMID, (struct shmid_ds *)0);
+        semctl(BUFF_FULL_ID, IPC_RMID, (struct shmid_ds *)0);
+        semctl(SEM_ID, IPC_RMID, (struct semid_ds *)0);
+    }
+
     exit(0);
 }
 
@@ -98,14 +106,18 @@ int main()
     int BUFF_END_key = ftok("keyfile", 69);
     int BUFF_FULL_key = ftok("keyfile", 70);
     int SEM_key = ftok("keyfile", 71);
+    int REF_key = ftok("keyfile", 72);
 
     BUFF_START_ID = shmget(BUFF_START_key, sizeof(int), IPC_CREAT | 0666);
     BUFF_END_ID = shmget(BUFF_END_key, sizeof(int), IPC_CREAT | 0666);
     BUFF_FULL_ID = shmget(BUFF_FULL_key, sizeof(int), IPC_CREAT | 0666);
+    REF_ID = shmget(REF_key, sizeof(int), IPC_CREAT | 0666);
+
     // now initialize BUFF_START_ID BUFF_END_ID
     BUFF_START_ADRS = shmat(BUFF_START_ID, (void *)0, 0);
     BUFF_END_ADRS = shmat(BUFF_END_ID, (void *)0, 0);
     BUFF_FULL_ADRS = shmat(BUFF_FULL_ID, (void *)0, 0);
+    REF_ADRS = shmat(REF_ID, (void *)0, 0);
     SEM_ID = semget(SEM_key, 1, 0666 | IPC_CREAT);
     BUFF_ID = shmget(BUFF_key, BUFF_SIZE * sizeof(int), IPC_EXCL | IPC_CREAT | 0666);
 
@@ -117,6 +129,7 @@ int main()
         *BUFF_START_ADRS = 0;
         *BUFF_END_ADRS = 0;
         *BUFF_FULL_ADRS = 0;
+        *REF_ADRS = 1;
         union Semun semun;
         // intialize semphore
         semun.val = 1; /* initial value of the semaphore, Binary semaphore */
@@ -125,6 +138,10 @@ int main()
             perror("Error in semctl");
             exit(-1);
         }
+    }
+    else
+    {
+        *REF_ADRS += 1;
     }
     BUFF_ID = shmget(BUFF_key, BUFF_SIZE * sizeof(int), IPC_CREAT | 0666);
 
@@ -182,7 +199,7 @@ int main()
         }
         printf("number of items %d\n", count);
         up(SEM_ID);
-        sleep(1);
+        // sleep(2);
     }
     return 0;
 }
