@@ -14,17 +14,19 @@
 #define BUFF_SIZE 15
 // the code handles any number of clients simultaneously
 // 1. problem in removing
+
 struct msgbuff
 {
     long mtype;
     char mtext[MSG_SIZE];
 };
-int up_q_id = 0;
-int down_q_id = 0;
+
 // int shm_id = 0;
 int BUFF_ID, BUFF_START_ID, BUFF_END_ID, BUFF_FULL_ID;
 int REF_ID;
+int START_NUM_ID;
 int *REF_ADRS;
+int *START_NUM_ADRS;
 int *BUFF_START_ADRS;
 int *BUFF_END_ADRS;
 int *BUFF_ADRS;
@@ -32,24 +34,23 @@ int *BUFF_FULL_ADRS;
 int SEM_ID;
 void exit_handler(int sigId)
 {
-    //TODO: BUFF_FULL_ID check that is deleted
-    //TODO: check there is no reference before deletion
-    // printf("exit BUFF_FULL_ID %d", BUFF_FULL_ID);
     *REF_ADRS -= 1;
     if (*REF_ADRS == 0)
     {
+
         shmdt(BUFF_START_ADRS);
         shmdt(BUFF_END_ADRS);
         shmdt(BUFF_ADRS);
         shmdt(BUFF_FULL_ADRS);
-        msgctl(up_q_id, IPC_RMID, (struct msqid_ds *)0);
-        msgctl(down_q_id, IPC_RMID, (struct msqid_ds *)0);
+        shmdt(REF_ADRS);
         shmctl(BUFF_ID, IPC_RMID, (struct shmid_ds *)0);
         shmctl(BUFF_END_ID, IPC_RMID, (struct shmid_ds *)0);
         shmctl(BUFF_START_ID, IPC_RMID, (struct shmid_ds *)0);
-        semctl(BUFF_FULL_ID, IPC_RMID, (struct shmid_ds *)0);
+        shmctl(BUFF_FULL_ID, IPC_RMID, (struct shmid_ds *)0);
+        shmctl(REF_ID, IPC_RMID, (struct shmid_ds *)0);
         semctl(SEM_ID, IPC_RMID, (struct semid_ds *)0);
     }
+
     exit(0);
 }
 
@@ -94,12 +95,9 @@ void up(int sem)
 
 int main()
 {
-    key_t key_id;
-    int rec_val;
-    int send_val;
+
     signal(SIGINT, exit_handler);
-    int up_q_key = ftok("keyfile", 65);
-    int down_q_key = ftok("keyfile", 66);
+
     int BUFF_key = ftok("keyfile", 67);
     int BUFF_START_key = ftok("keyfile", 68);
     int BUFF_END_key = ftok("keyfile", 69);
@@ -161,17 +159,7 @@ int main()
     printf("BUFF_END_ID %d \n", BUFF_END_ID);
     printf("BUFF_FULL_ID %d \n", BUFF_FULL_ID);
     printf("BUFF_ID %d \n", BUFF_ID);
-    //end
-    up_q_id = msgget(up_q_key, 0666 | IPC_CREAT);
-    down_q_id = msgget(down_q_key, 0666 | IPC_CREAT);
-    if (up_q_id == -1 || down_q_id == -1)
-    {
-        perror("Error in creating up and down queues\n");
-        exit(-1);
-    }
 
-    printf("up Queue ID = %d\n", up_q_id);
-    printf("down Queue ID = %d\n", down_q_id);
     printf("BUFF_ID  = %d\n", BUFF_ID);
 
     // initialize the semaphore
@@ -193,7 +181,7 @@ int main()
 
         // check if buffer is empty
         down(SEM_ID);
-        printf("semaphore in producer\n");
+        printf("producer\n");
         // if buffer empty
         int count = *BUFF_FULL_ADRS;
         if (count == BUFF_SIZE)
@@ -203,16 +191,17 @@ int main()
         else
         {
             printf("buffer is has empty place\n");
+            printf("number produced is %d\n", buff_number);
             int *target_addr = BUFF_ADRS + *BUFF_END_ADRS;
             *target_addr = buff_number;
             buff_number++;
             (*BUFF_END_ADRS) = ((*BUFF_END_ADRS) + 1) % BUFF_SIZE;
             (*BUFF_FULL_ADRS)++;
         }
-        printf("number of items %d\n", count);
-        printf("current buff_number %d\n", buff_number);
+        printf("number of items in buffer %d\n", count);
+
         up(SEM_ID);
-        // sleep(1);
+        sleep(1);
     }
     return 0;
 }
