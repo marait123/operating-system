@@ -8,17 +8,20 @@ int main(int agrc, char * argv[])
     initClk();
     
     //TODO it needs to get the remaining time from somewhere
-    remainingtime = argv[0];
+    remainingtime = atoi(argv[0]);
+    int clk;
+    int prevClk = 0;
     while (remainingtime > 0)
     {
-        remainingtime--;
-        break;
+        clk = getClk();
+        if(clk != prevClk)
+        {
+            remainingtime--;
+            prevClk = clk;
+        }
     }
-    if(remainingtime == 0)
-    {
-        signal(getppid(),SIGUSR1);
-    }
-    destroyClk(false);
+    kill(getppid(),SIGUSR1);
+    destroyClk(true);
     
     return 0;
 }
