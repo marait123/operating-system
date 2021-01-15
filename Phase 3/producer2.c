@@ -212,7 +212,7 @@ int main()
         printf("number of items %d\n", count);
         printf("current buff_number %d\n", buff_number);
         up(SEM_ID);
-        sleep(1);
+        // sleep(1);
     }
     return 0;
 }
