@@ -74,3 +74,15 @@ struct msgbuff
     long mtype;
     char mtext[256];
 };
+
+
+unsigned next_pow_2(unsigned size)
+{
+    size -= 1;
+    size |= (size >> 1);
+    size |= (size >> 2);
+    size |= (size >> 4);
+    size |= (size >> 8);
+    size |= (size >> 16);
+    return size + 1;
+}

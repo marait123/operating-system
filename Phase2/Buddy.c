@@ -24,8 +24,8 @@ struct Node
     struct Entry entry;
     struct Node *next;
 };
-// this is for waiting queue
 
+// this is for waiting queue
 struct Node *waiting_head = NULL;
 
 // push in the place where every one behind it
@@ -242,15 +242,17 @@ unsigned next_pow_2(unsigned size)
     size |= (size >> 16);
     return size + 1;
 }
-
-int main()
-{
-
-    Mem_Head = (struct MemNode *)malloc(sizeof(struct MemNode));
+void initialize_mem(){
+        Mem_Head = (struct MemNode *)malloc(sizeof(struct MemNode));
     Mem_Head->begin = 0;
     Mem_Head->state = 'H';
     Mem_Head->length = 1024;
     Mem_Head->next = NULL;
 
+}
+int main()
+{
+
     return 0;
 }
+t

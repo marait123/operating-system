@@ -11,6 +11,7 @@ struct Process
     bool arrived;
     int runtime;
     int priority; // this is process priority ranges from 0 to 10 where 0 is the heighest priority
+    int mem_size;
 };
 bool finished = false;
 int msgq_id;
@@ -57,6 +58,10 @@ int main(int argc, char *argv[])
         // read the priority
         ptr = strtok(NULL, delim);
         sys_prcesses[curr_number_of_processes].priority = atoi(ptr);
+
+        // read the memsize
+        ptr = strtok(NULL, delim);
+        sys_prcesses[curr_number_of_processes].mem_size = atoi(ptr);
 
         curr_number_of_processes++;
     }
@@ -149,15 +154,24 @@ int main(int argc, char *argv[])
         //get its arrival time
         if (sys_prcesses[i].arrival_time == getClk())
         {
-            snprintf(str, sizeof(str), "%d %d %d %d", sys_prcesses[i].id, sys_prcesses[i].arrival_time, sys_prcesses[i].runtime, sys_prcesses[i].priority);
+            snprintf(str, sizeof(str), "%d %d %d %d %d", sys_prcesses[i].id, sys_prcesses[i].arrival_time, sys_prcesses[i].runtime, sys_prcesses[i].priority, sys_prcesses[i].mem_size);
             message.mtype = iD;
             strcpy(message.mtext, str);
+            //printf("Genereator mess send clk is %d \n",getClk());
             send_val = msgsnd(msgq_id, &message, sizeof(message.mtext), IPC_NOWAIT);
+            
             if (send_val == -1)
                 perror("Error in send");
             curr_number_of_processes--;
             i++;
         }
+        // else
+        // {
+        //     strcpy(message.mtext, "pass");
+        //     //printf("Genereator mess send clk is %d \n",getClk());
+        //     message.mtype = iD;
+        //     send_val = msgsnd(msgq_id, &message, sizeof(message.mtext), IPC_NOWAIT);
+        // }
         //if all processes are served
         if (curr_number_of_processes == 0 && !finished)
         {
