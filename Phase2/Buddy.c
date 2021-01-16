@@ -15,6 +15,7 @@ struct Entry
     int lastEnd;
     int priority;
     char state;
+    int original_size;
     struct MemNode *memory;
 };
 
@@ -26,10 +27,20 @@ struct Node
 // this is for waiting queue
 
 struct Node *waiting_head = NULL;
-struct Node *waiting_rear = NULL;
 
 // push in the place where every one behind it
 // is bigger
+// entry must contain memory element with the length set
+struct Node *pop_from_waiting()
+{
+    if (waiting_head == NULL)
+    {
+        return NULL;
+    }
+    struct Node *temp = waiting_head;
+    waiting_head = waiting_head->next;
+    return temp;
+}
 void push_in_waiting(struct Entry entry)
 {
     struct Node *newEntry = (struct Node *)malloc(sizeof(struct Node));
@@ -38,22 +49,26 @@ void push_in_waiting(struct Entry entry)
     if (waiting_head == NULL)
     {
         waiting_head = newEntry;
-        waiting_rear = newEntry;
     }
     else
     {
         struct Node *scan = waiting_head;
-        while (scan->next != NULL)
+        struct Node *prev = NULL;
+
+        while (scan != NULL && scan->entry.memory->length <= entry.memory->length)
         {
-            if (scan->next->entry.memory->length >= entry.memory->length)
-            {
-                scan->next = newEntry;
-                break;
-            }
+            prev = scan;
             scan = scan->next;
         }
-        if (scan == waiting_head)
+        if (prev == NULL)
         {
+            newEntry->next = waiting_head;
+            waiting_head = newEntry;
+        }
+        else
+        {
+            newEntry->next = scan;
+            prev->next = newEntry;
         }
     }
 }
@@ -152,6 +167,47 @@ struct MemNode *insert_memory(struct MemNode *start, int length)
     }
 
     return process_place;
+}
+// after releasing memory check if the length
+// of the returned MemNode is suitable for the first
+// Node in the waiting_list
+struct MemNode *release_memory(struct MemNode *mem)
+{
+    struct MemNode *scan = Mem_Head;
+    struct MemNode *prev = NULL;
+    int next_pow = next_pow_2(mem->length + 1);
+    if (mem->length % next_pow == 0)
+    {
+        ///merging with right
+        if (mem->next->state == 'H' &&
+            mem->next->length == mem->length)
+        {
+            // merge
+            // TODO free the memeory released
+            mem->length = mem->length * 2;
+            mem->next = mem->next->next;
+            mem->state = 'H';
+        }
+    }
+    else
+    {
+        // merge with left
+        while (scan != mem)
+        {
+            prev = scan;
+            scan = scan->next;
+        }
+        // scan points to mem and prev points to
+        // the node before scan
+        if (prev == NULL)
+        {
+
+            Mem_Head = Mem_Head->next;
+        }
+        else
+        {
+        }
+    }
 }
 
 unsigned next_pow_2(unsigned size)
