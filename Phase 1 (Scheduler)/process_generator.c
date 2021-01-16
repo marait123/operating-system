@@ -152,12 +152,21 @@ int main(int argc, char *argv[])
             snprintf(str, sizeof(str), "%d %d %d %d", sys_prcesses[i].id, sys_prcesses[i].arrival_time, sys_prcesses[i].runtime, sys_prcesses[i].priority);
             message.mtype = iD;
             strcpy(message.mtext, str);
+            //printf("Genereator mess send clk is %d \n",getClk());
             send_val = msgsnd(msgq_id, &message, sizeof(message.mtext), IPC_NOWAIT);
+            
             if (send_val == -1)
                 perror("Error in send");
             curr_number_of_processes--;
             i++;
         }
+        // else
+        // {
+        //     strcpy(message.mtext, "pass");
+        //     //printf("Genereator mess send clk is %d \n",getClk());
+        //     message.mtype = iD;
+        //     send_val = msgsnd(msgq_id, &message, sizeof(message.mtext), IPC_NOWAIT);
+        // }
         //if all processes are served
         if (curr_number_of_processes == 0 && !finished)
         {

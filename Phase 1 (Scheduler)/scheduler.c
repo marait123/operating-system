@@ -124,7 +124,6 @@ void translate(char inp[])
 {
     char str[strlen(inp)];
     strcpy (str, inp);
-    //printf("translated message %s \n", str);
     int n = 1;//atoi(str[0]);
     for(int i = 0; i < n; i++)
     {
@@ -180,18 +179,27 @@ void display()
     printf("==================END OF PCB==================\n");
 }
 
-
+FILE *out_file;
+int clk;
 int main(int argc, char *argv[])
 {
     initClk();
 
-    int clk = getClk();
+    clk = getClk();
     int prevClk = 0;
 
     signal (SIGUSR1, handler);
 
     algo_type = atoi(argv[0]);
     int quantum = atoi(argv[1]);
+    out_file = fopen("scheduler.log", "w"); // write only
+    if (out_file == NULL) 
+    {   
+        printf("Error! Could not open file\n"); 
+        exit(-1); // must include stdlib.h 
+    }
+    // write to file vs write to screen 
+    fprintf(out_file, "#At time x process y state arr w total z remain y wait k\n"); // write to file
     //TODO implement the scheduler :)
     //upon termination release the clock resources.
     printf("schedular is started\n");
@@ -214,6 +222,10 @@ int main(int argc, char *argv[])
         if (rec_val != -1)
         {
             ////if there is no new processes
+            // if (!strcmp(message.mtext, "pass"))
+            // {
+                
+            // }
             if (!strcmp(message.mtext, "Done !"))
             {
                 printf("wohooo !\n");
@@ -247,6 +259,7 @@ int main(int argc, char *argv[])
                         temp->entry.remainTime -= (clk - temp->entry.lastStart);
                         temp->entry.lastEnd = clk;
                         temp->entry.state = 'S';
+                        fprintf(out_file, "At time %d process %d stoped arr %d total %d remain %d wait %d\n",clk,temp->entry.id,temp->entry.arrivalTime,temp->entry.runTime,temp->entry.remainTime,temp->entry.waitTime); // write to file
                     }
                     // // Context switching
                     // //while loop on running process
@@ -273,6 +286,7 @@ int main(int argc, char *argv[])
                         head->entry.state = 'R';
                         head->entry.lastStart = clk;
                         head->entry.waitTime = clk - head->entry.arrivalTime;
+                        fprintf(out_file, "At time %d process %d started arr %d total %d remain %d wait %d\n",clk,head->entry.id,head->entry.arrivalTime,head->entry.runTime,head->entry.remainTime,head->entry.waitTime); // write to file
                         // Saving the status for the system preparing to outfile
                     }
                 }
@@ -290,11 +304,13 @@ int main(int argc, char *argv[])
                             temp->entry.state = 'S';
                             temp->entry.lastEnd = clk;
                             temp->entry.remainTime -= (clk - temp->entry.lastStart);
+                            fprintf(out_file, "At time %d process %d stopped arr %d total %d remain %d wait %d\n",clk,temp->entry.id,temp->entry.arrivalTime,temp->entry.runTime,temp->entry.remainTime,temp->entry.waitTime); // write to file
                         }
                         head->entry.state = 'R';
                         head->entry.lastStart = clk;
                         head->entry.waitTime += clk - head->entry.lastEnd;
                         kill(head->entry.pid,SIGCONT);
+                        fprintf(out_file, "At time %d process %d resumed arr %d total %d remain %d wait %d\n",clk,head->entry.id,head->entry.arrivalTime,head->entry.runTime,head->entry.remainTime,head->entry.waitTime); // write to file
 
                     }
                     // No Preemption will occur as Head still Qualified
@@ -337,6 +353,7 @@ int main(int argc, char *argv[])
                                 round_roubin_coming->entry.pid = pid;
                                 round_roubin_coming->entry.lastStart = clk;
                                 round_roubin_coming->entry.state = 'R';
+                                fprintf(out_file, "At time %d process %d started arr %d total %d remain %d wait %d\n",clk,round_roubin_coming->entry.id,round_roubin_coming->entry.arrivalTime,round_roubin_coming->entry.runTime,round_roubin_coming->entry.remainTime,round_roubin_coming->entry.waitTime); // write to file
                                 round_roubin_coming = round_roubin_coming->next;
                             }
                         }
@@ -347,6 +364,7 @@ int main(int argc, char *argv[])
                             round_roubin_coming->entry.lastStart = clk;
                             round_roubin_coming->entry.state = 'R';
                             kill(round_roubin_coming->entry.pid,SIGCONT);
+                            fprintf(out_file, "At time %d process %d resumed arr %d total %d remain %d wait %d\n",clk,round_roubin_coming->entry.id,round_roubin_coming->entry.arrivalTime,round_roubin_coming->entry.runTime,round_roubin_coming->entry.remainTime,round_roubin_coming->entry.waitTime); // write to file
                             round_roubin_coming = round_roubin_coming->next;
                         }
                     }
@@ -372,6 +390,7 @@ int main(int argc, char *argv[])
                                 head->entry.pid = pid;
                                 head->entry.lastStart = clk;
                                 head->entry.state = 'R';
+                                fprintf(out_file, "At time %d process %d started arr %d total %d remain %d wait %d\n",clk,round_roubin_coming->entry.id,round_roubin_coming->entry.arrivalTime,round_roubin_coming->entry.runTime,round_roubin_coming->entry.remainTime,round_roubin_coming->entry.waitTime); // write to file
                                 round_roubin_coming = head->next;
                             }
                         }
@@ -382,6 +401,7 @@ int main(int argc, char *argv[])
                             head->entry.lastStart = clk;
                             head->entry.state = 'R';
                             kill(round_roubin_coming->entry.pid,SIGCONT);
+                            fprintf(out_file, "At time %d process %d resumed arr %d total %d remain %d wait %d\n",clk,round_roubin_coming->entry.id,round_roubin_coming->entry.arrivalTime,round_roubin_coming->entry.runTime,round_roubin_coming->entry.remainTime,round_roubin_coming->entry.waitTime); // write to file
                             round_roubin_coming = head->next;
                         }
                     }
@@ -405,6 +425,7 @@ int main(int argc, char *argv[])
                             temp->entry.lastEnd = clk;
                             temp->entry.remainTime -= quantum;
                             temp->entry.state = 'S';
+                            fprintf(out_file, "At time %d process %d stopped arr %d total %d remain %d wait %d\n",clk,round_roubin_coming->entry.id,round_roubin_coming->entry.arrivalTime,round_roubin_coming->entry.runTime,round_roubin_coming->entry.remainTime,round_roubin_coming->entry.waitTime); // write to file
                             if(round_roubin_coming != NULL)
                             {
                                 //first time to be runned
@@ -427,6 +448,7 @@ int main(int argc, char *argv[])
                                         round_roubin_coming->entry.state = 'R';
                                         round_roubin_coming->entry.lastStart = clk;
                                         round_roubin_coming->entry.waitTime = clk - round_roubin_coming->entry.arrivalTime;
+                                        fprintf(out_file, "At time %d process %d started arr %d total %d remain %d wait %d\n",clk,round_roubin_coming->entry.id,round_roubin_coming->entry.arrivalTime,round_roubin_coming->entry.runTime,round_roubin_coming->entry.remainTime,round_roubin_coming->entry.waitTime); // write to file
                                         round_roubin_coming = round_roubin_coming->next;
                                         // Saving the status for the system preparing to outfile
                                     }
@@ -437,6 +459,7 @@ int main(int argc, char *argv[])
                                     round_roubin_coming->entry.lastStart = clk;
                                     round_roubin_coming->entry.waitTime += (clk - round_roubin_coming->entry.lastEnd);
                                     kill(round_roubin_coming->entry.pid,SIGCONT);
+                                    fprintf(out_file, "At time %d process %d resumed arr %d total %d remain %d wait %d\n",clk,round_roubin_coming->entry.id,round_roubin_coming->entry.arrivalTime,round_roubin_coming->entry.runTime,round_roubin_coming->entry.remainTime,round_roubin_coming->entry.waitTime); // write to file
                                     round_roubin_coming = round_roubin_coming->next;
                                 } 
                             }
@@ -447,6 +470,7 @@ int main(int argc, char *argv[])
                                 round_roubin_coming = head->next;
                                 head->entry.waitTime += clk - head->entry.lastEnd;
                                 kill(head->entry.pid,SIGCONT);
+                                fprintf(out_file, "At time %d process %d started arr %d total %d remain %d wait %d\n",clk,head->entry.id,head->entry.arrivalTime,head->entry.runTime,head->entry.remainTime,head->entry.waitTime); // write to file
                             }
                         }
                     }
@@ -455,12 +479,11 @@ int main(int argc, char *argv[])
             display();
         }
     }
-
+    fclose(out_file);
     destroyClk(true);
 }
 struct Node* findRunning()
 {
-
    //start from the first link
    struct Node* current = head;
 
@@ -487,37 +510,7 @@ struct Node* findRunning()
 	
    return current;
 }
-// struct Node* remove_entry(int index)
-// {
-//    struct Node* current = head;
-//    struct Node* previous = NULL;
-//    if(head == NULL)
-//    {
-//       return NULL;
-//    }
 
-//    while(current->entry.id != index)
-//    {
-//       if(current->next == NULL)
-//       {
-//          return NULL;
-//       } 
-//       else 
-//       {
-//          previous = current;
-//          current = current->next;
-//       }
-//    }
-//    if(current == head)
-//    {
-//       head = head->next;
-//    } 
-//    else
-//    {
-//       previous->next = current->next;
-//    }    
-//    return current;
-// }
 struct Node* remove_running()
 {
    struct Node* current = head;
@@ -565,6 +558,8 @@ void handler(int signum)
 {
     printf("Schedular have got signal #%d from a finished process\n", signum);
     //process_finished();
-    remove_running();
+    struct Node* temp = remove_running();
+    fprintf(out_file, "At time %d process %d finished arr %d total %d remain %d wait %d\n",clk,temp->entry.id,temp->entry.arrivalTime,temp->entry.runTime,temp->entry.remainTime,temp->entry.waitTime); // write to file
+    
     signal(SIGUSR1, handler );
 }
