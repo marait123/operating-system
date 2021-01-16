@@ -173,13 +173,19 @@ struct MemNode *insert_memory(struct MemNode *start, int length)
 // Node in the waiting_list
 struct MemNode *release_memory(struct MemNode *mem)
 {
-    struct MemNode *scan = Mem_Head;
-    struct MemNode *prev = NULL;
+    if (mem->state == 'H')
+    {
+        perror("cannot releaes a hole");
+        exit(-1);
+    }
+    mem->state = 'H';
+    struct MemNode *merged_node = mem;
+
     int next_pow = next_pow_2(mem->length + 1);
-    if (mem->length % next_pow == 0)
+    if (mem->begin % next_pow == 0)
     {
         ///merging with right
-        if (mem->next->state == 'H' &&
+        if (mem->next != NULL && mem->next->state == 'H' &&
             mem->next->length == mem->length)
         {
             // merge
@@ -187,10 +193,14 @@ struct MemNode *release_memory(struct MemNode *mem)
             mem->length = mem->length * 2;
             mem->next = mem->next->next;
             mem->state = 'H';
+            merged_node = mem;
         }
     }
     else
     {
+
+        struct MemNode *scan = Mem_Head;
+        struct MemNode *prev = NULL;
         // merge with left
         while (scan != mem)
         {
@@ -201,13 +211,25 @@ struct MemNode *release_memory(struct MemNode *mem)
         // the node before scan
         if (prev == NULL)
         {
-
-            Mem_Head = Mem_Head->next;
+            // prev cannot ben null
+            // perror("error {prev cannot ben null} happend in release_memory\n");
+            // exit(-1);
+            // Mem_Head = Mem_Head->next;
         }
         else
         {
+            if (prev->state == 'H' &&
+                scan->length == prev->length)
+            {
+                prev->length = prev->length * 2;
+                prev->next = scan->next;
+                // prev->state = 'H'; // not necessary
+                // TODO: remove scan before is gone
+                merged_node = prev;
+            }
         }
     }
+    return merged_node;
 }
 
 unsigned next_pow_2(unsigned size)
