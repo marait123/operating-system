@@ -12,12 +12,7 @@ struct Process
     int runtime;
     int priority; // this is process priority ranges from 0 to 10 where 0 is the heighest priority
 };
-
-struct msgbuff
-{
-    long mtype;
-    char mtext[256];
-};
+bool finished = false;
 int msgq_id;
 void clearResources(int signum);
 
@@ -164,10 +159,11 @@ int main(int argc, char *argv[])
             i++;
         }
         //if all processes are served
-        if (curr_number_of_processes == 0)
+        if (curr_number_of_processes == 0 && !finished)
         {
             strcpy(message.mtext, "Done !");
             send_val = msgsnd(msgq_id, &message, sizeof(message.mtext), IPC_NOWAIT);
+            finished = true;
         }
     }
 }

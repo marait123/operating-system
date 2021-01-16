@@ -1,6 +1,7 @@
 #include "headers.h"
-#include <errno.h>
 #include <string.h>
+#include <errno.h>
+#include <stdlib.h>
 /*
     how it should work
     1. Start a new process. (Fork it and give it its parameters.)
@@ -25,11 +26,6 @@ void handler(int signum);
 bool No_new_process = false;
 int algo_type;
 int msg_q_id;
-struct msgbuff
-{
-    long mtype;
-    char mtext[256];
-};
 struct Observer
 {
     // the output file data loader
@@ -41,8 +37,9 @@ struct Entry
     int arrivalTime;
     int lastStart;
     int remainTime;
-    int waitTime;
     int runTime;
+    int waitTime;
+    int lastEnd;
     int priority;
     char state;
 };
@@ -54,6 +51,7 @@ struct Node
 };
 struct Node *head = NULL;
 struct Node *rear = NULL;
+struct Node *round_roubin_coming = NULL;
 void push_back(struct Entry entry)
 {
     struct Node *newEntry = (struct Node *)malloc(sizeof(struct Node));
@@ -61,14 +59,16 @@ void push_back(struct Entry entry)
     if (head == NULL)
     {
         head = newEntry;
+        rear = newEntry;
     }
     else
     {
-        struct Node *temp = rear;
-        temp->next = newEntry;
+        rear->next = newEntry;
         rear = newEntry;
     }
 }
+struct Node* findRunning();
+struct Node* remove_running();
 void insert_Queue(struct Entry entry)
 {
     struct Node* newEntry = (struct Node*) malloc(sizeof(struct Node));
@@ -83,7 +83,7 @@ void insert_Queue(struct Entry entry)
         struct Node* prev = NULL;
         if(algo_type == 0)
         {
-            while(entry.priority > curr->entry.priority)
+            while(curr != NULL && entry.priority > curr->entry.priority)
             {
                 prev = curr;
                 curr = curr->next;
@@ -101,7 +101,7 @@ void insert_Queue(struct Entry entry)
         }
         else if(algo_type == 1)
         {
-            while(entry.remainTime > curr->entry.remainTime)
+            while(curr != NULL && entry.remainTime >= curr->entry.remainTime)
             {
                 prev = curr;
                 curr = curr->next;
@@ -120,55 +120,67 @@ void insert_Queue(struct Entry entry)
     }
 }
 
-void translate(char str[])
+void translate(char inp[])
 {
+    char str[strlen(inp)];
+    strcpy (str, inp);
+    //printf("translated message %s \n", str);
     int n = 1;//atoi(str[0]);
     for(int i = 0; i < n; i++)
     {
         //kill(getpid(),SIGSTOP);
         struct Entry entry;
-        char delim = " ";
+        char delim[] = " ";
 
         // read the id
         char *ptr = strtok(str, delim);
         entry.id = atoi(ptr);
-
+        //printf("ID: %d \n", entry.id);
         // read the arrival
         ptr = strtok(NULL, delim);
         entry.arrivalTime = atoi(ptr);
-
+        //printf("arrival: %d \n", entry.arrivalTime);
         // read the runtime
         ptr = strtok(NULL, delim);
         entry.runTime = atoi(ptr);
         entry.remainTime = atoi(ptr);
-
+        //printf("RunTime: %d \n", entry.runTime);
         // read the priority
         ptr = strtok(NULL, delim);
         entry.priority = atoi(ptr);
+        entry.state = 'S';
+        //printf("Priority: %d \n", entry.priority);
         entry.pid = -1;
+        entry.waitTime = 0;
+        entry.lastEnd = 0;
         if(algo_type == 2)
             push_back(entry);
         else
             insert_Queue(entry);
     }
 }
+
 void display()
 {
     struct Node *temp = head;
+    printf("==================START OF PCB==================\n");
     while(temp)
     {
-        printf("id: ",temp->entry.id);
-        printf("arrivalTime: ",temp->entry.arrivalTime);
-        printf("pid: ",temp->entry.pid);
-        printf("runTime: ",temp->entry.runTime);
-        printf("waitTime: ",temp->entry.waitTime);
-        printf("remainTime: ",temp->entry.remainTime);
-        printf("priority: ",temp->entry.priority);
-        printf("state: ",temp->entry.state);
-        printf("====================================");
+        printf("id: %d \n",temp->entry.id);
+        printf("arrivalTime: %d \n",temp->entry.arrivalTime);
+        printf("pid: %d \n",temp->entry.pid);
+        printf("runTime: %d \n",temp->entry.runTime);
+        printf("waitTime: %d \n",temp->entry.waitTime);
+        printf("remainTime: %d \n",temp->entry.remainTime);
+        printf("priority: %d \n",temp->entry.priority);
+        printf("state: %c \n",temp->entry.state);
+        printf("====================================\n");
         temp = temp->next;
     }
+    printf("==================END OF PCB==================\n");
 }
+
+
 int main(int argc, char *argv[])
 {
     initClk();
@@ -198,38 +210,42 @@ int main(int argc, char *argv[])
     while (1)
     {   
         clk = getClk();
+        rec_val = msgrcv(msgq_id, &message, sizeof(message.mtext), 0, IPC_NOWAIT);
+        if (rec_val != -1)
+        {
+            ////if there is no new processes
+            if (!strcmp(message.mtext, "Done !"))
+            {
+                printf("wohooo !\n");
+                No_new_process = true;
+            }
+            else
+            {
 
+                printf("\nMessage received: %s with m-type: %ld \n", message.mtext, message.mtype);
+                translate(message.mtext);
+            }
+        }
         if(clk != prevClk)
         {
+            printf("The  clk is %d\n",clk);
+            //display();
             prevClk = clk;
             if (head == NULL && No_new_process)
                 break;
-            rec_val = msgrcv(msgq_id, &message, sizeof(message.mtext), 0, IPC_NOWAIT);
-            if (rec_val != -1)
-            {
-                ////if there is no new processes
-                if (!strcmp(message.mtext, "Done !"))
-                {
-                    printf("wohooo !\n");
-                    No_new_process = true;
-                }
-                else
-                {
-                    printf("\nMessage received: %s with m-type: %ld \n", message.mtext, message.mtype);
-                    translate(message.mtext);
-                    
-                }
-            }
             // Either HPF or SRTN
             if(algo_type != 2 && head != NULL)
             {
+                // this process is first time to run
                 if(head->entry.pid == -1)
-                {   
+                {
                     struct Node* temp = findRunning();
+                    //preemption is occuring
                     if( temp != NULL)
                     {
                         kill(temp->entry.pid,SIGSTOP);
                         temp->entry.remainTime -= (clk - temp->entry.lastStart);
+                        temp->entry.lastEnd = clk;
                         temp->entry.state = 'S';
                     }
                     // // Context switching
@@ -241,102 +257,202 @@ int main(int argc, char *argv[])
                     if(pid == 0)
                     {
                         printf(" I am going to fork....");
-                        execl ("./process.out", head->entry.remainTime);
+                        //head->entry.waitTime= (clk - head->entry.arrivalTime) - (head->entry.runTime-head->entry.remainTime);
+                        //execl("./process.out", head->entry.remainTime);//, head->entry.waitTime);
+                        char s_remain_time[10];
+                        sprintf(s_remain_time, "%d", head->entry.remainTime);
+                        execl("./process.out", s_remain_time);
                         printf("error is %d\n", errno);
                         printf("error occurred couldn't execute process.out");
                         exit(-1);
                     }
+                    // parent (scheduler) is modifying the pcb
                     else
                     {
                         head->entry.pid = pid;
                         head->entry.state = 'R';
                         head->entry.lastStart = clk;
+                        head->entry.waitTime = clk - head->entry.arrivalTime;
                         // Saving the status for the system preparing to outfile
                     }
                 }
+                // Preempted before and Now its time to continue
                 else
                 {
                     // //SIG CONT & lst = clk & save data
                     struct Node* temp = findRunning();
+                    // Preemption will occur between the temp(the running before) and head (that will run)
                     if(head->entry.state != 'R')
                     {
-                        kill(temp->entry.pid,SIGSTOP);
-                        temp->entry.remainTime -= (clk - temp->entry.lastStart);
-                        temp->entry.state = 'S';
+                        if(temp != NULL)
+                        {
+                            kill(temp->entry.pid,SIGSTOP);
+                            temp->entry.state = 'S';
+                            temp->entry.lastEnd = clk;
+                            temp->entry.remainTime -= (clk - temp->entry.lastStart);
+                        }
+                        head->entry.state = 'R';
+                        head->entry.lastStart = clk;
+                        head->entry.waitTime += clk - head->entry.lastEnd;
+                        kill(head->entry.pid,SIGCONT);
+
                     }
-                    head->entry.state = 'R';
-                    head->entry.lastStart = clk;
-                    kill(head->entry.pid,SIGCONT);
+                    // No Preemption will occur as Head still Qualified
+                    else
+                    {
+                        head->entry.remainTime -= (clk - head->entry.lastStart);
+                        head->entry.lastEnd = clk;
+                        head->entry.lastStart = clk;
+                        //head->entry.remainTime -= 1;// = head->entry.runTime - (clk - head->entry.lastStart);
+                    }
                 }
             }
             // Round Roubin
             else if (head != NULL)
             {
                 struct Node* temp = findRunning();
+                // there is a finished process or this is the first step in the system
                 if(temp == NULL)
                 {
-                    int pid = fork();
-                    if(pid == 0)
+                    // there is a finished process *NOT* at the end of the pcb
+                    if(round_roubin_coming != NULL)
                     {
-                        printf(" I am going to fork....");
-                        execl ("./process.out", head->entry.remainTime);
-                        printf("error is %d\n", errno);
-                        printf("error occurred couldn't execute process.out");
-                        exit(-1);
-                    }
-                    else
-                    {
-                        head->entry.pid = pid;
-                        head->entry.state = 'R';
-                        head->entry.lastStart = clk;
-                        // Saving the status for the system preparing to outfile
-                    }
-                }
-                else
-                { 
-                    if(clk - temp->entry.lastStart == quantum)
-                    {
-                        kill(temp->entry.pid,SIGSTOP);
-                        temp->entry.remainTime -= quantum;
-                        temp->entry.state = 'S';
-                        if(temp->next != NULL)
+                        // it is first time to run
+                        if(round_roubin_coming->entry.pid == -1)
                         {
-                            if(temp->next->entry.pid == -1)
+                            int pid = fork();
+                            if(pid == 0)
                             {
-                                int pid = fork();
-                                if(pid == 0)
-                                {
-                                    printf(" I am going to fork....");
-                                    execl ("./process.out", temp->next->entry.remainTime);
-                                    printf("error is %d\n", errno);
-                                    printf("error occurred couldn't execute process.out");
-                                    exit(-1);
-                                }
-                                else
-                                {
-                                    temp->next->entry.pid = pid;
-                                    temp->next->entry.state = 'R';
-                                    temp->next->entry.lastStart = clk;
-                                    // Saving the status for the system preparing to outfile
-                                }
+                                printf(" I am going to fork....");
+                                char s_remain_time[10];
+                                sprintf(s_remain_time, "%d", round_roubin_coming->entry.remainTime);
+                                execl("./process.out", s_remain_time);
+                                printf("error is %d\n", errno);
+                                printf("error occurred couldn't execute process.out");
+                                exit(-1);
                             }
                             else
                             {
-                                temp->next->entry.state = 'R';
-                                temp->next->entry.lastStart = clk;
-                                kill(temp->next->entry.pid,SIGCONT);
+                                round_roubin_coming->entry.waitTime = clk - round_roubin_coming->entry.arrivalTime;
+                                round_roubin_coming->entry.pid = pid;
+                                round_roubin_coming->entry.lastStart = clk;
+                                round_roubin_coming->entry.state = 'R';
+                                round_roubin_coming = round_roubin_coming->next;
                             }
-                            
                         }
-                        else if (head != temp)
+                        // its run before
+                        else
                         {
-                            head->entry.state = 'R';
+                            round_roubin_coming->entry.waitTime += clk - round_roubin_coming->entry.lastEnd;
+                            round_roubin_coming->entry.lastStart = clk;
+                            round_roubin_coming->entry.state = 'R';
+                            kill(round_roubin_coming->entry.pid,SIGCONT);
+                            round_roubin_coming = round_roubin_coming->next;
+                        }
+                    }
+                    else
+                    {
+                        // it is first time to run
+                        if(head->entry.pid == -1)
+                        {
+                            int pid = fork();
+                            if(pid == 0)
+                            {
+                                printf(" I am going to fork....");
+                                char s_remain_time[10];
+                                sprintf(s_remain_time, "%d", head->entry.remainTime);
+                                execl("./process.out", s_remain_time);
+                                printf("error is %d\n", errno);
+                                printf("error occurred couldn't execute process.out");
+                                exit(-1);
+                            }
+                            else
+                            {
+                                head->entry.waitTime = clk - head->entry.arrivalTime;
+                                head->entry.pid = pid;
+                                head->entry.lastStart = clk;
+                                head->entry.state = 'R';
+                                round_roubin_coming = head->next;
+                            }
+                        }
+                        // its run before
+                        else
+                        {
+                            head->entry.waitTime += clk - head->entry.lastEnd;
                             head->entry.lastStart = clk;
-                            kill(head->entry.pid,SIGCONT);
+                            head->entry.state = 'R';
+                            kill(round_roubin_coming->entry.pid,SIGCONT);
+                            round_roubin_coming = head->next;
+                        }
+                    }
+                }
+                else
+                {
+                // there is running process found: 1-Quantum hasnot finished 2-Quantum finished and no other process 3-Quantum finished and preemption will occur
+                    // took a complete quantum
+                    if(clk - temp->entry.lastStart == quantum)
+                    {
+                        // there is only one process in the system
+                        if(temp->entry.pid == head->entry.pid && round_roubin_coming == NULL)
+                        {
+                            temp->entry.remainTime -= quantum;
+                            temp->entry.lastStart = clk;
+                            round_roubin_coming = temp->next;
+                        }
+                        else
+                        {
+                            kill(temp->entry.pid,SIGSTOP);
+                            temp->entry.lastEnd = clk;
+                            temp->entry.remainTime -= quantum;
+                            temp->entry.state = 'S';
+                            if(round_roubin_coming != NULL)
+                            {
+                                //first time to be runned
+                                if(round_roubin_coming->entry.pid == -1)
+                                {
+                                    int pid = fork();
+                                    if(pid == 0)
+                                    {
+                                        printf(" I am going to fork....");
+                                        char s_remain_time[10];
+                                        sprintf(s_remain_time, "%d", round_roubin_coming->entry.remainTime);
+                                        execl("./process.out", s_remain_time);
+                                        printf("error is %d\n", errno);
+                                        printf("error occurred couldn't execute process.out");
+                                        exit(-1);
+                                    }
+                                    else
+                                    {
+                                        round_roubin_coming->entry.pid = pid;
+                                        round_roubin_coming->entry.state = 'R';
+                                        round_roubin_coming->entry.lastStart = clk;
+                                        round_roubin_coming->entry.waitTime = clk - round_roubin_coming->entry.arrivalTime;
+                                        round_roubin_coming = round_roubin_coming->next;
+                                        // Saving the status for the system preparing to outfile
+                                    }
+                                }
+                                else
+                                {
+                                    round_roubin_coming->entry.state = 'R';
+                                    round_roubin_coming->entry.lastStart = clk;
+                                    round_roubin_coming->entry.waitTime += (clk - round_roubin_coming->entry.lastEnd);
+                                    kill(round_roubin_coming->entry.pid,SIGCONT);
+                                    round_roubin_coming = round_roubin_coming->next;
+                                } 
+                            }
+                            else
+                            {
+                                head->entry.state = 'R';
+                                head->entry.lastStart = clk;
+                                round_roubin_coming = head->next;
+                                head->entry.waitTime += clk - head->entry.lastEnd;
+                                kill(head->entry.pid,SIGCONT);
+                            }
                         }
                     }
                 }
             }
+            display();
         }
     }
 
