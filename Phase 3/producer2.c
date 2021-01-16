@@ -13,17 +13,25 @@
 #define MSG_SIZE 4096
 #define BUFF_SIZE 15
 // the code handles any number of clients simultaneously
+// 1. problem in removing
 
 struct msgbuff
 {
     long mtype;
     char mtext[MSG_SIZE];
 };
-int up_q_id = 0;
-int down_q_id = 0;
+
+typedef short bool;
+#define true 1
+#define false 0
+
+// bool was_in_critical = false;
 // int shm_id = 0;
 int BUFF_ID, BUFF_START_ID, BUFF_END_ID, BUFF_FULL_ID;
-
+int REF_ID;
+int initial_ID;
+int *REF_ADRS;
+int *initial_ADRS;
 int *BUFF_START_ADRS;
 int *BUFF_END_ADRS;
 int *BUFF_ADRS;
@@ -31,18 +39,27 @@ int *BUFF_FULL_ADRS;
 int SEM_ID;
 void exit_handler(int sigId)
 {
+    *REF_ADRS -= 1;
+    if (*REF_ADRS == 0)
+    {
+        // detach shared memory
+        shmdt(BUFF_START_ADRS);
+        shmdt(BUFF_END_ADRS);
+        shmdt(BUFF_ADRS);
+        shmdt(BUFF_FULL_ADRS);
+        shmdt(REF_ADRS);
+        shmdt(initial_ADRS);
+        // remove shared memory
+        shmctl(BUFF_ID, IPC_RMID, (struct shmid_ds *)0);
+        shmctl(BUFF_END_ID, IPC_RMID, (struct shmid_ds *)0);
+        shmctl(BUFF_START_ID, IPC_RMID, (struct shmid_ds *)0);
+        shmctl(BUFF_FULL_ID, IPC_RMID, (struct shmid_ds *)0);
+        shmctl(REF_ID, IPC_RMID, (struct shmid_ds *)0);
+        shmctl(initial_ID, IPC_RMID, (struct shmid_ds *)0);
+        // remove semaphore
+        semctl(SEM_ID, IPC_RMID, (struct semid_ds *)0);
+    }
 
-    shmdt(BUFF_START_ADRS);
-    shmdt(BUFF_END_ADRS);
-    shmdt(BUFF_ADRS);
-    shmdt(BUFF_FULL_ADRS);
-    msgctl(up_q_id, IPC_RMID, (struct msqid_ds *)0);
-    msgctl(down_q_id, IPC_RMID, (struct msqid_ds *)0);
-    shmctl(BUFF_ID, IPC_RMID, (struct shmid_ds *)0);
-    shmctl(BUFF_END_ID, IPC_RMID, (struct shmid_ds *)0);
-    shmctl(BUFF_START_ID, IPC_RMID, (struct shmid_ds *)0);
-    semctl(BUFF_FULL_ID, IPC_RMID, (struct shmid_ds *)0);
-    semctl(SEM_ID, IPC_RMID, (struct semid_ds *)0);
     exit(0);
 }
 
@@ -87,28 +104,29 @@ void up(int sem)
 
 int main()
 {
-    key_t key_id;
-    int rec_val;
-    int send_val;
     signal(SIGINT, exit_handler);
-    int up_q_key = ftok("Keyfile", 65);
-    int down_q_key = ftok("Keyfile", 66);
-    int BUFF_key = ftok("Keyfile", 67);
-    int BUFF_START_key = ftok("Keyfile", 68);
-    int BUFF_END_key = ftok("Keyfile", 69);
-    int BUFF_FULL_key = ftok("Keyfile", 70);
-    int SEM_key = ftok("Keyfile", 71);
+    int BUFF_key = ftok("keyfile", 67);
+    int BUFF_START_key = ftok("keyfile", 68);
+    int BUFF_END_key = ftok("keyfile", 69);
+    int BUFF_FULL_key = ftok("keyfile", 70);
+    int SEM_key = ftok("keyfile", 71);
+    int REF_key = ftok("keyfile", 72);
+    int initial_key = ftok("keyfile", 73);
 
     BUFF_START_ID = shmget(BUFF_START_key, sizeof(int), IPC_CREAT | 0666);
     BUFF_END_ID = shmget(BUFF_END_key, sizeof(int), IPC_CREAT | 0666);
     BUFF_FULL_ID = shmget(BUFF_FULL_key, sizeof(int), IPC_CREAT | 0666);
+    REF_ID = shmget(REF_key, sizeof(int), IPC_CREAT | 0666);
+    initial_ID = shmget(initial_key, sizeof(int), IPC_CREAT | 0666);
     // now initialize BUFF_START_ID BUFF_END_ID
     BUFF_START_ADRS = shmat(BUFF_START_ID, (void *)0, 0);
     BUFF_END_ADRS = shmat(BUFF_END_ID, (void *)0, 0);
     BUFF_FULL_ADRS = shmat(BUFF_FULL_ID, (void *)0, 0);
+    REF_ADRS = shmat(REF_ID, (void *)0, 0);
+    initial_ADRS = shmat(initial_ID, (void *)0, 0);
+
     SEM_ID = semget(SEM_key, 1, 0666 | IPC_CREAT);
     BUFF_ID = shmget(BUFF_key, BUFF_SIZE * sizeof(int), IPC_EXCL | IPC_CREAT | 0666);
-
     // this means it is not initialized yet
     if (BUFF_ID != -1)
     {
@@ -117,6 +135,8 @@ int main()
         *BUFF_START_ADRS = 0;
         *BUFF_END_ADRS = 0;
         *BUFF_FULL_ADRS = 0;
+        *REF_ADRS = 1;
+        *initial_ADRS = 0;
         union Semun semun;
         // intialize semphore
         semun.val = 1; /* initial value of the semaphore, Binary semaphore */
@@ -125,6 +145,11 @@ int main()
             perror("Error in semctl");
             exit(-1);
         }
+    }
+    else
+    {
+        *REF_ADRS += 1;
+        *initial_ADRS += 100;
     }
     BUFF_ID = shmget(BUFF_key, BUFF_SIZE * sizeof(int), IPC_CREAT | 0666);
 
@@ -136,34 +161,11 @@ int main()
         exit(-1);
     }
 
-    up_q_id = msgget(up_q_key, 0666 | IPC_CREAT);
-    down_q_id = msgget(down_q_key, 0666 | IPC_CREAT);
-    if (up_q_id == -1 || down_q_id == -1)
-    {
-        perror("Error in creating up and down queues\n");
-        exit(-1);
-    }
-    printf("up Queue ID = %d\n", up_q_id);
-    printf("down Queue ID = %d\n", down_q_id);
     printf("BUFF_ID  = %d\n", BUFF_ID);
 
     // initialize the semaphore
-    int buff_number = 0;
+    int buff_number = *initial_ADRS;
     struct msgbuff message;
-    message.mtype = 0;
-
-    rec_val = msgrcv(down_q_id, &message, sizeof(message.mtext), 0, !IPC_NOWAIT);
-    if (rec_val == -1)
-    {
-        perror("Error in receive\n");
-        exit(-1);
-    }
-    else
-    {
-        printf("message received %s", message.mtype);
-    }
-    exit_handler(0);
-    return 0;
     // producer writes buff_number starting from the buff_end
     /*
     * If the buffer is empty, it waits for a message from the producer telling it that
@@ -172,61 +174,32 @@ int main()
     passing) to the producer telling it that the buffer is no longer full.
     • If the buffer is neither empty nor full, it consumes an item from the buffer
     */
-
-    // TODO: what happens if consumer is started first
+    // TODO: problem when producer is faster than consumer
+    //TODO: check that more than one producer and cosumers are allowed
     while (1)
     {
+
         // check if buffer is empty
         down(SEM_ID);
-        printf("semaphore in producer\n");
+        printf("producer\n");
         // if buffer empty
         int count = *BUFF_FULL_ADRS;
-        if (count == 0)
-        {
-
-            printf("buffer is empty\n");
-            message.mtype = 0;
-            up(SEM_ID);
-            rec_val = msgrcv(up_q_id, &message, sizeof(message.mtext), 0, !IPC_NOWAIT);
-            if (rec_val == -1)
-            {
-                perror("Error in receive\n");
-                exit(-1);
-            }
-            down(SEM_ID);
-
-            printf("now buffer isn't empty\n");
-            int *target_addr = BUFF_ADRS + *BUFF_START_ADRS;
-            (*BUFF_START_ADRS) = ((*BUFF_START_ADRS) + 1) % BUFF_SIZE;
-            *BUFF_FULL_ADRS -= 1;
-            printf("number consumed %d \n", *target_addr);
-        }
-        else if (count == BUFF_SIZE)
+        if (count == BUFF_SIZE)
         {
             printf("buffer is full\n");
-            int *target_addr = BUFF_ADRS + *BUFF_START_ADRS;
-            (*BUFF_START_ADRS) = ((*BUFF_START_ADRS) + 1) % BUFF_SIZE;
-            *BUFF_FULL_ADRS -= 1;
-
-            printf("number consumed %d \n", *target_addr);
-            strcpy(message.mtext, "not_full");
-            up(SEM_ID);
-            send_val = msgsnd(down_q_id, &message, sizeof(message.mtext), !IPC_NOWAIT);
-            if (rec_val == -1)
-            {
-                perror("error in receive\n");
-            }
-            down(SEM_ID);
         }
         else
         {
-            printf("buffer is neither empty nor full");
-            int *target_addr = BUFF_ADRS + *BUFF_START_ADRS;
-            (*BUFF_START_ADRS) = ((*BUFF_START_ADRS) + 1) % BUFF_SIZE;
-            *BUFF_FULL_ADRS -= 1;
-            printf("number consumed %d \n", *target_addr);
+            printf("buffer is has empty place\n");
+            printf("number produced is %d\n", buff_number);
+            int *target_addr = BUFF_ADRS + *BUFF_END_ADRS;
+            *target_addr = buff_number;
+            buff_number++;
+            (*BUFF_END_ADRS) = ((*BUFF_END_ADRS) + 1) % BUFF_SIZE;
+            (*BUFF_FULL_ADRS)++;
         }
-        printf("number of items %d\n", count);
+        printf("number of items in buffer %d\n", count);
+
         up(SEM_ID);
         sleep(1);
     }
