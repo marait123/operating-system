@@ -26,7 +26,8 @@ int main(int argc, char *argv[])
     char *line = NULL;
     size_t len = 0;
     ssize_t read;
-    pFile = fopen("processes.txt", "r");
+    pFile = fopen("/mnt/hgfs/operating-sytems/project/project_2/operating-system/Phase2/process2.txt", "r");
+    printf("errno %d", errno);
     struct Process sys_prcesses[MAX_PROCESSES]; // this is the data structure for storing the prcesses
     int curr_number_of_processes = 0;
     if (pFile == NULL)
@@ -159,7 +160,7 @@ int main(int argc, char *argv[])
             strcpy(message.mtext, str);
             //printf("Genereator mess send clk is %d \n",getClk());
             send_val = msgsnd(msgq_id, &message, sizeof(message.mtext), IPC_NOWAIT);
-            
+
             if (send_val == -1)
                 perror("Error in send");
             curr_number_of_processes--;

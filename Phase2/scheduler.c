@@ -22,6 +22,16 @@
         (a) Scheduler.log
         (b) Scheduler.perf
     */
+
+struct MemNode
+{
+    int begin;
+    int length;
+    char state; // H or P
+    struct MemNode *next;
+};
+
+struct MemNode *Mem_Head = NULL;
 void handler(int signum);
 bool No_new_process = false;
 int algo_type;
@@ -44,7 +54,7 @@ struct Entry
     int priority;
     char state;
     int original_size;
-    struct MemNode *memory;
+    struct MemNode *memory; /// begin & length
 };
 
 struct Node
@@ -52,6 +62,9 @@ struct Node
     struct Entry entry;
     struct Node *next;
 };
+
+#define PRINT_ALLOCATION 0
+#define PRINT_DEALLOCATION 1
 
 // this is for waiting queue
 struct Node *waiting_head = NULL;
@@ -69,6 +82,7 @@ struct Node *pop_from_waiting()
     waiting_head = waiting_head->next;
     return temp;
 }
+
 void push_in_waiting(struct Entry entry)
 {
     struct Node *newEntry = (struct Node *)malloc(sizeof(struct Node));
@@ -101,15 +115,6 @@ void push_in_waiting(struct Entry entry)
     }
 }
 
-struct MemNode
-{
-    int begin;
-    int length;
-    char state; // H or P
-    struct MemNode *next;
-};
-
-struct MemNode *Mem_Head = NULL;
 /*
 return the MemNode with the least suitable length 
 or returns NULL if not found
@@ -275,6 +280,7 @@ void push_back(struct Entry entry)
 {
     struct Node *newEntry = (struct Node *)malloc(sizeof(struct Node));
     newEntry->entry = entry;
+    printlog(newEntry, PRINT_ALLOCATION);
     if (head == NULL)
     {
         head = newEntry;
@@ -292,6 +298,8 @@ void insert_Queue(struct Entry entry)
 {
     struct Node *newEntry = (struct Node *)malloc(sizeof(struct Node));
     newEntry->entry = entry;
+    printlog(newEntry, PRINT_ALLOCATION);
+
     if (head == NULL)
     {
         head = newEntry;
@@ -370,7 +378,7 @@ void translate(char inp[])
         // read the mempry size
         ptr = strtok(NULL, delim);
         entry.original_size = atoi(ptr);
-        entry.memory = MemNode();
+        entry.memory = (struct MemNode *)malloc(sizeof(struct MemNode));
         entry.memory->length = next_pow_2(entry.original_size);
 
         entry.state = 'S';
@@ -386,12 +394,12 @@ void translate(char inp[])
             struct MemNode *suit_mem = suitable_memory(entry.original_size);
             if (suit_mem == NULL)
             {
-
                 push_in_waiting(entry);
             }
             else
             {
                 entry.memory = insert_memory(suit_mem, entry.original_size);
+
                 push_back(entry);
             }
         }
@@ -432,8 +440,32 @@ void display()
     }
     printf("==================END OF PCB==================\n");
 }
+FILE *out_file1, *out_file2;
+void printlog(struct Node *temp, int print_type)
+{
+    int end = temp->entry.memory->begin + temp->entry.memory->length - 1;
+    if (print_type == PRINT_ALLOCATION)
+    {
+        //printf("#At time x allocated y bytes for process z from i to j");
+        fprintf(out_file2, "At time %d allocated %d bytes for process %d from %d to %d\n",
+                getClk(),
+                temp->entry.original_size,
+                temp->entry.id,
+                temp->entry.memory->begin,
+                end);
+    }
+    else
+    {
 
-FILE *out_file;
+        fprintf(out_file2, "At time %d freed %d bytes from process %d from %d to %d\n",
+                getClk(),
+                temp->entry.original_size,
+                temp->entry.id,
+                temp->entry.memory->begin,
+                end);
+    }
+}
+
 int clk;
 int main(int argc, char *argv[])
 {
@@ -446,14 +478,16 @@ int main(int argc, char *argv[])
 
     algo_type = atoi(argv[0]);
     int quantum = atoi(argv[1]);
-    out_file = fopen("scheduler.log", "w"); // write only
-    if (out_file == NULL)
+    out_file1 = fopen("scheduler.log", "w"); // write only
+    out_file2 = fopen("memory.log", "w");    // write only
+    if (out_file1 == NULL || out_file2 == NULL)
     {
         printf("Error! Could not open file\n");
         exit(-1); // must include stdlib.h
     }
     // write to file vs write to screen
-    fprintf(out_file, "#At time x process y state arr w total z remain y wait k\n"); // write to file
+    fprintf(out_file1, "#At time x process y state arr w total z remain y wait k\n"); // write to file
+    fprintf(out_file2, "#At time x allocated y bytes for process z from i to j\n");   // write to file
     //TODO implement the scheduler :)
     //upon termination release the clock resources.
     printf("schedular is started\n");
@@ -509,7 +543,7 @@ int main(int argc, char *argv[])
                         temp->entry.remainTime -= (clk - temp->entry.lastStart);
                         temp->entry.lastEnd = clk;
                         temp->entry.state = 'S';
-                        fprintf(out_file, "At time %d process %d stoped arr %d total %d remain %d wait %d\n", clk, temp->entry.id, temp->entry.arrivalTime, temp->entry.runTime, temp->entry.remainTime, temp->entry.waitTime); // write to file
+                        fprintf(out_file1, "At time %d process %d stoped arr %d total %d remain %d wait %d\n", clk, temp->entry.id, temp->entry.arrivalTime, temp->entry.runTime, temp->entry.remainTime, temp->entry.waitTime); // write to file
                     }
                     // // Context switching
                     // //while loop on running process
@@ -536,7 +570,7 @@ int main(int argc, char *argv[])
                         head->entry.state = 'R';
                         head->entry.lastStart = clk;
                         head->entry.waitTime = clk - head->entry.arrivalTime;
-                        fprintf(out_file, "At time %d process %d started arr %d total %d remain %d wait %d\n", clk, head->entry.id, head->entry.arrivalTime, head->entry.runTime, head->entry.remainTime, head->entry.waitTime); // write to file
+                        fprintf(out_file1, "At time %d process %d started arr %d total %d remain %d wait %d\n", clk, head->entry.id, head->entry.arrivalTime, head->entry.runTime, head->entry.remainTime, head->entry.waitTime); // write to file
                         // Saving the status for the system preparing to outfile
                     }
                 }
@@ -554,13 +588,13 @@ int main(int argc, char *argv[])
                             temp->entry.state = 'S';
                             temp->entry.lastEnd = clk;
                             temp->entry.remainTime -= (clk - temp->entry.lastStart);
-                            fprintf(out_file, "At time %d process %d stopped arr %d total %d remain %d wait %d\n", clk, temp->entry.id, temp->entry.arrivalTime, temp->entry.runTime, temp->entry.remainTime, temp->entry.waitTime); // write to file
+                            fprintf(out_file1, "At time %d process %d stopped arr %d total %d remain %d wait %d\n", clk, temp->entry.id, temp->entry.arrivalTime, temp->entry.runTime, temp->entry.remainTime, temp->entry.waitTime); // write to file
                         }
                         head->entry.state = 'R';
                         head->entry.lastStart = clk;
                         head->entry.waitTime += clk - head->entry.lastEnd;
                         kill(head->entry.pid, SIGCONT);
-                        fprintf(out_file, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", clk, head->entry.id, head->entry.arrivalTime, head->entry.runTime, head->entry.remainTime, head->entry.waitTime); // write to file
+                        fprintf(out_file1, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", clk, head->entry.id, head->entry.arrivalTime, head->entry.runTime, head->entry.remainTime, head->entry.waitTime); // write to file
                     }
                     // No Preemption will occur as Head still Qualified
                     else
@@ -602,7 +636,7 @@ int main(int argc, char *argv[])
                                 round_roubin_coming->entry.pid = pid;
                                 round_roubin_coming->entry.lastStart = clk;
                                 round_roubin_coming->entry.state = 'R';
-                                fprintf(out_file, "At time %d process %d started arr %d total %d remain %d wait %d\n", clk, round_roubin_coming->entry.id, round_roubin_coming->entry.arrivalTime, round_roubin_coming->entry.runTime, round_roubin_coming->entry.remainTime, round_roubin_coming->entry.waitTime); // write to file
+                                fprintf(out_file1, "At time %d process %d started arr %d total %d remain %d wait %d\n", clk, round_roubin_coming->entry.id, round_roubin_coming->entry.arrivalTime, round_roubin_coming->entry.runTime, round_roubin_coming->entry.remainTime, round_roubin_coming->entry.waitTime); // write to file
                                 round_roubin_coming = round_roubin_coming->next;
                             }
                         }
@@ -613,7 +647,7 @@ int main(int argc, char *argv[])
                             round_roubin_coming->entry.lastStart = clk;
                             round_roubin_coming->entry.state = 'R';
                             kill(round_roubin_coming->entry.pid, SIGCONT);
-                            fprintf(out_file, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", clk, round_roubin_coming->entry.id, round_roubin_coming->entry.arrivalTime, round_roubin_coming->entry.runTime, round_roubin_coming->entry.remainTime, round_roubin_coming->entry.waitTime); // write to file
+                            fprintf(out_file1, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", clk, round_roubin_coming->entry.id, round_roubin_coming->entry.arrivalTime, round_roubin_coming->entry.runTime, round_roubin_coming->entry.remainTime, round_roubin_coming->entry.waitTime); // write to file
                             round_roubin_coming = round_roubin_coming->next;
                         }
                     }
@@ -639,7 +673,7 @@ int main(int argc, char *argv[])
                                 head->entry.pid = pid;
                                 head->entry.lastStart = clk;
                                 head->entry.state = 'R';
-                                fprintf(out_file, "At time %d process %d started arr %d total %d remain %d wait %d\n", clk, round_roubin_coming->entry.id, round_roubin_coming->entry.arrivalTime, round_roubin_coming->entry.runTime, round_roubin_coming->entry.remainTime, round_roubin_coming->entry.waitTime); // write to file
+                                fprintf(out_file1, "At time %d process %d started arr %d total %d remain %d wait %d\n", clk, round_roubin_coming->entry.id, round_roubin_coming->entry.arrivalTime, round_roubin_coming->entry.runTime, round_roubin_coming->entry.remainTime, round_roubin_coming->entry.waitTime); // write to file
                                 round_roubin_coming = head->next;
                             }
                         }
@@ -650,7 +684,7 @@ int main(int argc, char *argv[])
                             head->entry.lastStart = clk;
                             head->entry.state = 'R';
                             kill(round_roubin_coming->entry.pid, SIGCONT);
-                            fprintf(out_file, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", clk, round_roubin_coming->entry.id, round_roubin_coming->entry.arrivalTime, round_roubin_coming->entry.runTime, round_roubin_coming->entry.remainTime, round_roubin_coming->entry.waitTime); // write to file
+                            fprintf(out_file1, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", clk, round_roubin_coming->entry.id, round_roubin_coming->entry.arrivalTime, round_roubin_coming->entry.runTime, round_roubin_coming->entry.remainTime, round_roubin_coming->entry.waitTime); // write to file
                             round_roubin_coming = head->next;
                         }
                     }
@@ -674,7 +708,7 @@ int main(int argc, char *argv[])
                             temp->entry.lastEnd = clk;
                             temp->entry.remainTime -= quantum;
                             temp->entry.state = 'S';
-                            fprintf(out_file, "At time %d process %d stopped arr %d total %d remain %d wait %d\n", clk, round_roubin_coming->entry.id, round_roubin_coming->entry.arrivalTime, round_roubin_coming->entry.runTime, round_roubin_coming->entry.remainTime, round_roubin_coming->entry.waitTime); // write to file
+                            fprintf(out_file1, "At time %d process %d stopped arr %d total %d remain %d wait %d\n", clk, round_roubin_coming->entry.id, round_roubin_coming->entry.arrivalTime, round_roubin_coming->entry.runTime, round_roubin_coming->entry.remainTime, round_roubin_coming->entry.waitTime); // write to file
                             if (round_roubin_coming != NULL)
                             {
                                 //first time to be runned
@@ -697,7 +731,7 @@ int main(int argc, char *argv[])
                                         round_roubin_coming->entry.state = 'R';
                                         round_roubin_coming->entry.lastStart = clk;
                                         round_roubin_coming->entry.waitTime = clk - round_roubin_coming->entry.arrivalTime;
-                                        fprintf(out_file, "At time %d process %d started arr %d total %d remain %d wait %d\n", clk, round_roubin_coming->entry.id, round_roubin_coming->entry.arrivalTime, round_roubin_coming->entry.runTime, round_roubin_coming->entry.remainTime, round_roubin_coming->entry.waitTime); // write to file
+                                        fprintf(out_file1, "At time %d process %d started arr %d total %d remain %d wait %d\n", clk, round_roubin_coming->entry.id, round_roubin_coming->entry.arrivalTime, round_roubin_coming->entry.runTime, round_roubin_coming->entry.remainTime, round_roubin_coming->entry.waitTime); // write to file
                                         round_roubin_coming = round_roubin_coming->next;
                                         // Saving the status for the system preparing to outfile
                                     }
@@ -708,7 +742,7 @@ int main(int argc, char *argv[])
                                     round_roubin_coming->entry.lastStart = clk;
                                     round_roubin_coming->entry.waitTime += (clk - round_roubin_coming->entry.lastEnd);
                                     kill(round_roubin_coming->entry.pid, SIGCONT);
-                                    fprintf(out_file, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", clk, round_roubin_coming->entry.id, round_roubin_coming->entry.arrivalTime, round_roubin_coming->entry.runTime, round_roubin_coming->entry.remainTime, round_roubin_coming->entry.waitTime); // write to file
+                                    fprintf(out_file1, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", clk, round_roubin_coming->entry.id, round_roubin_coming->entry.arrivalTime, round_roubin_coming->entry.runTime, round_roubin_coming->entry.remainTime, round_roubin_coming->entry.waitTime); // write to file
                                     round_roubin_coming = round_roubin_coming->next;
                                 }
                             }
@@ -719,16 +753,17 @@ int main(int argc, char *argv[])
                                 round_roubin_coming = head->next;
                                 head->entry.waitTime += clk - head->entry.lastEnd;
                                 kill(head->entry.pid, SIGCONT);
-                                fprintf(out_file, "At time %d process %d started arr %d total %d remain %d wait %d\n", clk, head->entry.id, head->entry.arrivalTime, head->entry.runTime, head->entry.remainTime, head->entry.waitTime); // write to file
+                                fprintf(out_file1, "At time %d process %d started arr %d total %d remain %d wait %d\n", clk, head->entry.id, head->entry.arrivalTime, head->entry.runTime, head->entry.remainTime, head->entry.waitTime); // write to file
                             }
                         }
                     }
                 }
             }
-            display();
+            //display();
         }
     }
-    fclose(out_file);
+    fclose(out_file1);
+    fclose(out_file2);
     destroyClk(true);
 }
 struct Node *findRunning()
@@ -798,24 +833,47 @@ void handler(int signum)
     printf("Schedular have got signal #%d from a finished process\n", signum);
     //process_finished();
     struct Node *temp = remove_running();
-    fprintf(out_file, "At time %d process %d finished arr %d total %d remain %d wait %d\n", clk, temp->entry.id, temp->entry.arrivalTime, temp->entry.runTime, temp->entry.remainTime, temp->entry.waitTime); // write to file
+    printlog(temp, PRINT_DEALLOCATION);
+    fprintf(out_file1, "At time %d process %d finished arr %d total %d remain %d wait %d\n", clk, temp->entry.id, temp->entry.arrivalTime, temp->entry.runTime, temp->entry.remainTime, temp->entry.waitTime); // write to file
+
     struct MemNode *mem = release_memory(temp->entry.memory);
 
-    struct MemNode *suit_mem = suitable_memory(waiting_head->entry.original_size);
-    while (suit_mem != NULL)
+    if (waiting_head != NULL)
     {
-        // insert memory returns the suitalbe memory after setting
-        // its parameters (state, begin, length)
-        struct MemNode *free_mem = insert_memory(suit_mem, temp->entry.original_size);
-        // pop_from_waiting get the top process and removes it
-        struct Node *wait_proc = pop_from_waiting();
-        // set the entry.memory to free_mem
-        wait_proc->entry.memory = free_mem;
-        // push the wait_proc in the ready_queue
-        push_back(wait_proc->entry);
-        insert_Queue(wait_proc->entry);
-        suit_mem = suitable_memory(waiting_head->entry.original_size);
+        struct MemNode *suit_mem = suitable_memory(waiting_head->entry.original_size);
+
+        if (suit_mem == NULL)
+        {
+            printf("null suit mem\n");
+        }
+        while (suit_mem != NULL)
+        {
+            printf("suitable memory begin: %d end: %d\n", suit_mem->begin, suit_mem->length);
+
+            // insert memory returns the suitalbe memory after setting
+            // its parameters (state, begin, length)
+            struct MemNode *free_mem = insert_memory(suit_mem, temp->entry.original_size);
+            // pop_from_waiting get the top process and removes it
+            struct Node *wait_proc = pop_from_waiting();
+            // set the entry.memory to free_mem
+            wait_proc->entry.memory = free_mem;
+            // push the wait_proc in the ready_queue
+
+            // if RR
+            if (algo_type == RR)
+            {
+                push_back(wait_proc->entry);
+            }
+            else
+            {
+                // SJFT or priority
+                insert_Queue(wait_proc->entry);
+            }
+
+            suit_mem = suitable_memory(waiting_head->entry.original_size);
+        }
     }
 
+    printf("end of sig handler\n");
     signal(SIGUSR1, handler);
 }
