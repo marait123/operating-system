@@ -74,6 +74,7 @@ struct Node *waiting_head = NULL;
 // entry must contain memory element with the length set
 struct Node *pop_from_waiting()
 {
+    printf("pop from wait\n");
     if (waiting_head == NULL)
     {
         return NULL;
@@ -85,6 +86,7 @@ struct Node *pop_from_waiting()
 
 void push_in_waiting(struct Entry entry)
 {
+    printf("push in wait\n");
     struct Node *newEntry = (struct Node *)malloc(sizeof(struct Node));
     newEntry->entry = entry;
 
@@ -848,17 +850,20 @@ void handler(int signum)
         }
         while (suit_mem != NULL)
         {
-            printf("suitable memory begin: %d end: %d\n", suit_mem->begin, suit_mem->length);
+            printf("suitable memory begin: %d end: %d\n", suit_mem->begin,suit_mem->begin + suit_mem->length);
 
             // insert memory returns the suitalbe memory after setting
             // its parameters (state, begin, length)
             struct MemNode *free_mem = insert_memory(suit_mem, temp->entry.original_size);
             // pop_from_waiting get the top process and removes it
             struct Node *wait_proc = pop_from_waiting();
-            // set the entry.memory to free_mem
+
+            
+            
+            // set the entry memory to free_mem
             wait_proc->entry.memory = free_mem;
             // push the wait_proc in the ready_queue
-
+            printf("After setting the entry memory to free_mem\n");
             // if RR
             if (algo_type == RR)
             {
@@ -869,8 +874,17 @@ void handler(int signum)
                 // SJFT or priority
                 insert_Queue(wait_proc->entry);
             }
+            printf("after if else\n");
+            if (waiting_head!=NULL)
+            {
+                suit_mem = suitable_memory(waiting_head->entry.original_size);
+            }
+            else
+            {
+                break;
+            }
+            printf("after assigning suit_mem \n");
 
-            suit_mem = suitable_memory(waiting_head->entry.original_size);
         }
     }
 
